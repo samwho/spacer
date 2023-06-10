@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.3", features = ["derive"] }
 anyhow = "1.0"
-term_size = "0.3"
+terminal_size = "0.2"
 time = {version = "0.3", features = ["local-offset", "formatting", "macros"] }
 lazy_static = "1.4"
-colored = "2"
+owo-colors = "3"
