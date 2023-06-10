@@ -21,7 +21,7 @@ struct Args {
     every: Option<f64>,
 
     /// Maximum amount of seconds that can pass without a spacer.
-    #[arg(long)]
+    #[arg(long, default_value = "1")]
     after: Option<f64>,
 
     /// Inserts the date on each spacer.
@@ -110,8 +110,8 @@ impl Spacer {
     fn new(args: Args) -> Result<Self> {
         let spacer = Self {
             args,
-            last_spacer: Arc::new(RwLock::new(Instant::now())),
             last_line: Arc::new(RwLock::new(Instant::now())),
+            last_spacer: Arc::new(RwLock::new(Instant::now())),
         };
 
         Ok(spacer)
@@ -125,14 +125,13 @@ impl Spacer {
         let c_finished = finished.clone();
         let thread = spawn(move || loop {
             if *c_finished.read().unwrap() {
-                println!("Finished");
                 break;
             }
             sleep(std::time::Duration::from_millis(100));
 
             let last_line = c_last_line.read().unwrap();
             let last_spacer = c_last_spacer.read().unwrap();
-            if *last_spacer > *last_line {
+            if *last_spacer >= *last_line {
                 drop(last_line);
                 drop(last_spacer);
                 continue;
