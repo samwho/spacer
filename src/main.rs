@@ -11,30 +11,12 @@ use time::{
     format_description::OwnedFormatItem, macros::format_description, Instant, OffsetDateTime,
 };
 
-/// Spacer is a command line utility that inserts spacers between lines of
-/// input. It is useful for visually separating the output of commands.
 #[derive(Parser, Clone, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Minimum amount of seconds that can pass without a spacer.
-    #[arg(long)]
-    every: Option<f64>,
-
-    /// Maximum amount of seconds that can pass without a spacer.
-    #[arg(long, default_value = "1")]
+    /// Minimum number of seconds that have to pass before a spacer is printed
+    #[arg(long, default_value = "1.0")]
     after: Option<f64>,
-
-    /// Inserts the date on each spacer.
-    #[arg(long, default_value = "false")]
-    date: bool,
-
-    /// Inserts the time on each spacer.
-    #[arg(long, default_value = "true")]
-    time: bool,
-
-    /// Inserts a delta of how long has passed between spacers on each spacer.
-    #[arg(long, default_value = "true")]
-    delta: bool,
 }
 
 lazy_static! {
@@ -68,30 +50,24 @@ fn format_elapsed(seconds: f64) -> String {
     }
 }
 
-fn print_spacer(args: &Args, last_spacer: &Instant) -> Result<()> {
+fn print_spacer(last_spacer: &Instant) -> Result<()> {
     let (width, _) = terminal_size::terminal_size().context("Failed to get terminal size")?;
     let mut dashes: usize = width.0.into();
 
     let now = OffsetDateTime::now_local()?;
-    if args.date {
-        let date_str = now.format(&DATE_FORMAT)?;
-        print!("{} ", date_str.green());
-        dashes -= date_str.len() + 1;
-    }
+    let date_str = now.format(&DATE_FORMAT)?;
+    print!("{} ", date_str.green());
+    dashes -= date_str.len() + 1;
 
-    if args.time {
-        let time_str = now.format(&TIME_FORMAT)?;
-        print!("{} ", time_str.yellow());
-        dashes -= time_str.len() + 1;
-    }
+    let time_str = now.format(&TIME_FORMAT)?;
+    print!("{} ", time_str.yellow());
+    dashes -= time_str.len() + 1;
 
-    if args.delta {
-        let elapsed_seconds = last_spacer.elapsed().as_seconds_f64();
-        if elapsed_seconds > 0.1 {
-            let elapsed = format_elapsed(elapsed_seconds);
-            print!("{} ", elapsed.blue());
-            dashes -= elapsed.len() + 1;
-        }
+    let elapsed_seconds = last_spacer.elapsed().as_seconds_f64();
+    if elapsed_seconds > 0.1 {
+        let elapsed = format_elapsed(elapsed_seconds);
+        print!("{} ", elapsed.blue());
+        dashes -= elapsed.len() + 1;
     }
 
     print!("{}", "━".repeat(dashes).as_str().dimmed());
@@ -140,24 +116,11 @@ impl Spacer {
             let elapsed_since_line = last_line.elapsed().as_seconds_f64();
             drop(last_line);
 
-            let elapsed_since_spacer = last_spacer.elapsed().as_seconds_f64();
-
             if let Some(after) = c_args.after {
                 if elapsed_since_line > after {
-                    print_spacer(&c_args, &last_spacer).unwrap();
+                    print_spacer(&last_spacer).unwrap();
                     drop(last_spacer);
                     let mut last_spacer = c_last_spacer.write().unwrap();
-                    last_spacer.clone_from(&Instant::now());
-                    drop(last_spacer);
-                    continue;
-                }
-            }
-
-            if let Some(every) = c_args.every {
-                if elapsed_since_spacer > every {
-                    drop(last_spacer);
-                    let mut last_spacer = c_last_spacer.write().unwrap();
-                    print_spacer(&c_args, &last_spacer).unwrap();
                     last_spacer.clone_from(&Instant::now());
                     drop(last_spacer);
                     continue;
