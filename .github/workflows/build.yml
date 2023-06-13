@@ -51,6 +51,8 @@ jobs:
     name: Clippy [Linter]
     needs: cargo_check
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
