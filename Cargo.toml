@@ -7,7 +7,7 @@ authors = ["Sam Rose <hello@samwho.dev>"]
 keywords = ["cli"]
 categories = ["command-line-utilities"]
 repository = "https://github.com/samwho/spacer"
-description = "A small utility for adding spacers to command output"
+description = "A CLI utility for adding spacers when command output stops"
 include = [
     "Cargo.toml",
     "LICENSE",
