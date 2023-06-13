@@ -7,6 +7,7 @@ use std::{
     sync::{Arc, RwLock},
     thread::{sleep, spawn},
 };
+use terminal_size::{Height, Width};
 use time::{
     format_description::OwnedFormatItem, macros::format_description, Instant, OffsetDateTime,
 };
@@ -15,8 +16,16 @@ use time::{
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Minimum number of seconds that have to pass before a spacer is printed
-    #[arg(long, default_value = "1.0")]
-    after: Option<f64>,
+    #[arg(long, short, default_value = "1.0")]
+    after: f64,
+
+    /// Which character to use as a spacer
+    #[arg(long, short, default_value = "━")]
+    dash: char,
+
+    /// Number of newlines to print before and after spacer lines
+    #[arg(long, short, default_value = "0")]
+    padding: usize,
 }
 
 lazy_static! {
@@ -50,11 +59,15 @@ fn format_elapsed(seconds: f64) -> String {
     }
 }
 
-fn print_spacer(last_spacer: &Instant) -> Result<()> {
-    let (width, _) = terminal_size::terminal_size().context("Failed to get terminal size")?;
+fn print_spacer(args: &Args, last_spacer: &Instant) -> Result<()> {
+    let (width, _) = terminal_size::terminal_size().unwrap_or_else(|| (Width(80), Height(24)));
     let mut dashes: usize = width.0.into();
 
-    let now = OffsetDateTime::now_local()?;
+    if args.padding > 0 {
+        println!("{}", "\n".repeat(args.padding));
+    }
+
+    let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
     let date_str = now.format(&DATE_FORMAT)?;
     print!("{} ", date_str.green());
     dashes -= date_str.len() + 1;
@@ -70,8 +83,13 @@ fn print_spacer(last_spacer: &Instant) -> Result<()> {
         dashes -= elapsed.len() + 1;
     }
 
-    print!("{}", "━".repeat(dashes).as_str().dimmed());
+    print!("{}", args.dash.to_string().repeat(dashes).as_str().dimmed());
     println!();
+
+    if args.padding > 0 {
+        println!("{}", "\n".repeat(args.padding));
+    }
+
     Ok(())
 }
 
@@ -103,28 +121,42 @@ impl Spacer {
             if *c_finished.read().unwrap() {
                 break;
             }
-            sleep(std::time::Duration::from_millis(100));
 
             let last_line = c_last_line.read().unwrap();
             let last_spacer = c_last_spacer.read().unwrap();
             if *last_spacer >= *last_line {
                 drop(last_line);
                 drop(last_spacer);
+
+                // We sleep here because we know that we're going to sleep for
+                // a bare minimum of the --after interval.
+                sleep(std::time::Duration::from_millis(
+                    (c_args.after * 1000.0) as u64,
+                ));
                 continue;
             }
 
             let elapsed_since_line = last_line.elapsed().as_seconds_f64();
             drop(last_line);
 
-            if let Some(after) = c_args.after {
-                if elapsed_since_line > after {
-                    print_spacer(&last_spacer).unwrap();
-                    drop(last_spacer);
-                    let mut last_spacer = c_last_spacer.write().unwrap();
-                    last_spacer.clone_from(&Instant::now());
-                    drop(last_spacer);
-                    continue;
-                }
+            if elapsed_since_line >= c_args.after {
+                print_spacer(&c_args, &last_spacer).unwrap();
+                drop(last_spacer);
+                let mut last_spacer = c_last_spacer.write().unwrap();
+                last_spacer.clone_from(&Instant::now());
+                drop(last_spacer);
+
+                // We sleep here because we know that we're going to sleep for
+                // a bare minimum of the --after interval.
+                sleep(std::time::Duration::from_millis(
+                    (c_args.after * 1000.0) as u64,
+                ));
+            } else {
+                // We sleep for as long as it takes to get to the number of
+                // seconds --after the last line was printed.
+                sleep(std::time::Duration::from_millis(
+                    ((elapsed_since_line - c_args.after) * 1000.0) as u64,
+                ));
             }
         });
 
