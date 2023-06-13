@@ -115,13 +115,13 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            name: hmm-x86_64-unknown-linux-gnu.tar.gz
+            name: spacer-x86_64-unknown-linux-gnu.tar.gz
           - target: x86_64-apple-darwin
             os: macOS-latest
-            name: hmm-x86_64-apple-darwin.tar.gz
+            name: spacer-x86_64-apple-darwin.tar.gz
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            name: hmm-x86_64-pc-windows-msvc.zip
+            name: spacer-x86_64-pc-windows-msvc.zip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -143,20 +143,16 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          strip hmm.exe
-          strip hmmq.exe
-          strip hmmp.exe
-          7z a ../../../${{ matrix.name }} hmm.exe hmmq.exe hmmp.exe
+          strip spacer.exe
+          7z a ../../../${{ matrix.name }} spacer.exe
           cd -
 
       - name: Prepare build artifacts [-nix]
         if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          strip hmm
-          strip hmmq
-          strip hmmp
-          tar czvf ../../../${{ matrix.name }} hmm hmmq hmmp
+          strip spacer
+          tar czvf ../../../${{ matrix.name }} spacer
           cd -
 
       - name: Upload build artifact
@@ -176,32 +172,32 @@ jobs:
       - name: Download releases from github_build
         uses: actions/download-artifact@v3
         with:
-          name: hmm-x86_64-unknown-linux-gnu.tar.gz
+          name: spacer-x86_64-unknown-linux-gnu.tar.gz
           path: .
       - name: Download releases from github_build
         uses: actions/download-artifact@v3
         with:
-          name: hmm-x86_64-apple-darwin.tar.gz
+          name: spacer-x86_64-apple-darwin.tar.gz
           path: .
       - name: Download releases from github_build
         uses: actions/download-artifact@v3
         with:
-          name: hmm-x86_64-pc-windows-msvc.zip
+          name: spacer-x86_64-pc-windows-msvc.zip
           path: .
 
       - name: Generate checksums
-        run: for file in hmm-*; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
+        run: for file in spacer; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
 
       - name: Create GitHub release ${{ matrix.target }}
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            hmm-x86_64-unknown-linux-gnu.tar.gz
-            hmm-x86_64-unknown-linux-gnu.tar.gz.sha256
-            hmm-x86_64-apple-darwin.tar.gz
-            hmm-x86_64-apple-darwin.tar.gz.sha256
-            hmm-x86_64-pc-windows-msvc.zip
-            hmm-x86_64-pc-windows-msvc.zip.sha256
+            spacer-x86_64-unknown-linux-gnu.tar.gz
+            spacer-x86_64-unknown-linux-gnu.tar.gz.sha256
+            spacer-x86_64-apple-darwin.tar.gz
+            spacer-x86_64-apple-darwin.tar.gz.sha256
+            spacer-x86_64-pc-windows-msvc.zip
+            spacer-x86_64-pc-windows-msvc.zip.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
