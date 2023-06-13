@@ -8,8 +8,17 @@ in your log tail to know where the last request ended and the new one begins.
 
 ## Installation
 
+With Homebrew:
+
 ```
-cargo install --git https://github.com/samwho/spacer
+brew tap samwho/spacer
+brew install spacer
+```
+
+Direct from Cargo:
+
+```
+cargo install spacer
 ```
 
 ## Usage
