@@ -60,14 +60,14 @@ fn format_elapsed(seconds: f64) -> String {
 }
 
 fn print_spacer(args: &Args, last_spacer: &Instant) -> Result<()> {
-    let (width, _) = terminal_size::terminal_size().unwrap_or_else(|| (Width(80), Height(24)));
+    let (width, _) = terminal_size::terminal_size().unwrap_or((Width(80), Height(24)));
     let mut dashes: usize = width.0.into();
 
     if args.padding > 0 {
         println!("{}", "\n".repeat(args.padding));
     }
 
-    let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
+    let now = OffsetDateTime::now_local().unwrap_or(OffsetDateTime::now_utc());
     let date_str = now.format(&DATE_FORMAT)?;
     print!("{} ", date_str.green());
     dashes -= date_str.len() + 1;
