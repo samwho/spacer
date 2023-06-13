@@ -2,6 +2,22 @@
 name = "spacer"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+license-file = "LICENSE"
+authors = ["Sam Rose <hello@samwho.dev>"]
+keywords = ["cli"]
+categories = ["command-line-utilities"]
+repository = "https://github.com/samwho/spacer"
+description = "A small utility for adding spacers to command output"
+include = [
+    "Cargo.toml",
+    "LICENSE",
+    "README.md",
+    "**/*.rs",
+]
+
+[badges]
+maintenance = { status = "actively-developed" }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
