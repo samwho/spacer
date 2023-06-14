@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use lazy_static::lazy_static;
-use owo_colors::OwoColorize;
+use owo_colors::{self, OwoColorize, Stream};
 use std::{
     io::{stdin, BufRead},
     sync::{Arc, RwLock},
@@ -27,9 +27,13 @@ struct Args {
     #[arg(long, short, default_value = "0")]
     padding: usize,
 
-    /// Whether to colorize the output
-    #[arg(long, short, default_value = "false")]
+    /// Force the output to not be colorized
+    #[arg(long, group = "color-overrides", default_value = "false")]
     no_color: bool,
+
+    /// Force the output to be colorized, even if the output is not a TTY
+    #[arg(long, group = "color-overrides", default_value = "false")]
+    force_color: bool,
 }
 
 lazy_static! {
@@ -73,37 +77,37 @@ fn print_spacer(args: &Args, last_spacer: &Instant) -> Result<()> {
 
     let now = OffsetDateTime::now_local().unwrap_or(OffsetDateTime::now_utc());
     let date_str = now.format(&DATE_FORMAT)?;
-    if args.no_color {
-        print!("{} ", date_str);
-    } else {
-        print!("{} ", date_str.green());
-    }
+    print!(
+        "{} ",
+        date_str.if_supports_color(Stream::Stdout, |t| t.green())
+    );
     dashes -= date_str.len() + 1;
 
     let time_str = now.format(&TIME_FORMAT)?;
-    if args.no_color {
-        print!("{} ", time_str);
-    } else {
-        print!("{} ", time_str.yellow());
-    }
+    print!(
+        "{} ",
+        time_str.if_supports_color(Stream::Stdout, |t| t.yellow())
+    );
     dashes -= time_str.len() + 1;
 
     let elapsed_seconds = last_spacer.elapsed().as_seconds_f64();
     if elapsed_seconds > 0.1 {
         let elapsed = format_elapsed(elapsed_seconds);
-        if args.no_color {
-            print!("{} ", elapsed);
-        } else {
-            print!("{} ", elapsed.blue());
-        }
+        print!(
+            "{} ",
+            elapsed.if_supports_color(Stream::Stdout, |t| t.blue())
+        );
         dashes -= elapsed.len() + 1;
     }
 
-    if args.no_color {
-        print!("{}", args.dash.to_string().repeat(dashes).as_str());
-    } else {
-        print!("{}", args.dash.to_string().repeat(dashes).as_str().dimmed());
-    }
+    print!(
+        "{}",
+        args.dash
+            .to_string()
+            .repeat(dashes)
+            .as_str()
+            .if_supports_color(Stream::Stdout, |t| t.dimmed())
+    );
     println!();
 
     if args.padding > 0 {
@@ -198,6 +202,22 @@ impl Spacer {
 }
 
 fn main() -> Result<()> {
-    let mut app = Spacer::new(Args::parse())?;
+    let args = Args::parse();
+    println!("{:?}", args);
+
+    if args.force_color && args.no_color {
+        eprintln!("--force-color and --no-color are mutually exclusive");
+        std::process::exit(1);
+    }
+
+    if args.no_color {
+        owo_colors::set_override(false);
+    }
+
+    if args.force_color {
+        owo_colors::set_override(true);
+    }
+
+    let mut app = Spacer::new(args)?;
     app.run()
 }
