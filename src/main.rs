@@ -26,6 +26,10 @@ struct Args {
     /// Number of newlines to print before and after spacer lines
     #[arg(long, short, default_value = "0")]
     padding: usize,
+
+    /// Whether to colorize the output
+    #[arg(long, short, default_value = "false")]
+    no_color: bool,
 }
 
 lazy_static! {
@@ -69,17 +73,29 @@ fn print_spacer(args: &Args, last_spacer: &Instant) -> Result<()> {
 
     let now = OffsetDateTime::now_local().unwrap_or(OffsetDateTime::now_utc());
     let date_str = now.format(&DATE_FORMAT)?;
-    print!("{} ", date_str.green());
+    if args.no_color {
+        print!("{} ", date_str);
+    } else {
+        print!("{} ", date_str.green());
+    }
     dashes -= date_str.len() + 1;
 
     let time_str = now.format(&TIME_FORMAT)?;
-    print!("{} ", time_str.yellow());
+    if args.no_color {
+        print!("{} ", time_str);
+    } else {
+        print!("{} ", time_str.yellow());
+    }
     dashes -= time_str.len() + 1;
 
     let elapsed_seconds = last_spacer.elapsed().as_seconds_f64();
     if elapsed_seconds > 0.1 {
         let elapsed = format_elapsed(elapsed_seconds);
-        print!("{} ", elapsed.blue());
+        if args.no_color {
+            print!("{} ", elapsed);
+        } else {
+            print!("{} ", elapsed.blue());
+        }
         dashes -= elapsed.len() + 1;
     }
 
