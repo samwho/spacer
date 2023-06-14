@@ -99,7 +99,11 @@ fn print_spacer(args: &Args, last_spacer: &Instant) -> Result<()> {
         dashes -= elapsed.len() + 1;
     }
 
-    print!("{}", args.dash.to_string().repeat(dashes).as_str().dimmed());
+    if args.no_color {
+        print!("{}", args.dash.to_string().repeat(dashes).as_str());
+    } else {
+        print!("{}", args.dash.to_string().repeat(dashes).as_str().dimmed());
+    }
     println!();
 
     if args.padding > 0 {
