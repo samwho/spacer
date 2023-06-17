@@ -110,12 +110,16 @@ jobs:
       matrix:
         target:
           - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
           - x86_64-apple-darwin
           - x86_64-pc-windows-msvc
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             name: spacer-x86_64-unknown-linux-gnu.tar.gz
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            name: spacer-x86_64-unknown-linux-musl.tar.gz
           - target: x86_64-apple-darwin
             os: macOS-latest
             name: spacer-x86_64-apple-darwin.tar.gz
@@ -177,6 +181,11 @@ jobs:
       - name: Download releases from github_build
         uses: actions/download-artifact@v3
         with:
+          name: spacer-x86_64-unknown-linux-musl.tar.gz
+          path: .
+      - name: Download releases from github_build
+        uses: actions/download-artifact@v3
+        with:
           name: spacer-x86_64-apple-darwin.tar.gz
           path: .
       - name: Download releases from github_build
@@ -194,6 +203,8 @@ jobs:
           files: |
             spacer-x86_64-unknown-linux-gnu.tar.gz
             spacer-x86_64-unknown-linux-gnu.tar.gz.sha256
+            spacer-x86_64-unknown-linux-musl.tar.gz
+            spacer-x86_64-unknown-linux-musl.tar.gz.sha256
             spacer-x86_64-apple-darwin.tar.gz
             spacer-x86_64-apple-darwin.tar.gz.sha256
             spacer-x86_64-pc-windows-msvc.zip
