@@ -195,7 +195,7 @@ jobs:
           path: .
 
       - name: Generate checksums
-        run: for file in spacer; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
+        run: for file in spacer-*; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
 
       - name: Create GitHub release ${{ matrix.target }}
         uses: softprops/action-gh-release@v1
