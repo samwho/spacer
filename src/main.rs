@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 use log::debug;
 use owo_colors::{self, OwoColorize, Stream};
 use std::{
+    cmp::max,
     io::{stdin, stdout, BufRead, Write},
     ops::DerefMut,
     sync::{Arc, Mutex, RwLock},
@@ -216,7 +217,10 @@ fn run(
                     (c_args.after * 1000.0) as u64,
                 ));
             } else {
-                let sleep_for = c_args.after - elapsed_since_line;
+                // When calculating how long to sleep for, we want to make sure
+                // that we sleep for at least 10ms, so that we don't spin too
+                // much.
+                let sleep_for = f64::max(0.01, c_args.after - elapsed_since_line);
                 debug!(
                     "last line is newer than --after, sleeping for {:.2}s",
                     sleep_for
