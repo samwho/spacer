@@ -322,14 +322,14 @@ mod tests {
     }
 
     #[test_case(vec![], vec![] ; "no output")]
-    #[test_case(vec![Sleep(120)], vec![] ; "no output, after sleep")]
+    #[test_case(vec![Sleep(150)], vec![] ; "no output, after sleep")]
     #[test_case(
-        vec![WriteLn("foo"), Sleep(120)],
+        vec![WriteLn("foo"), Sleep(150)],
         vec![Line("foo"), Spacer]
         ; "single line"
     )]
     #[test_case(
-        vec![WriteLn("foo"), Sleep(120), WriteLn("bar"), WriteLn("baz"), Sleep(120)],
+        vec![WriteLn("foo"), Sleep(150), WriteLn("bar"), WriteLn("baz"), Sleep(150)],
         vec![Line("foo"), Spacer, Line("bar"), Line("baz"), Spacer]
         ; "multiple lines"
     )]
@@ -339,7 +339,7 @@ mod tests {
         ; "multiple lines, no sleeps"
     )]
     #[test_case(
-        vec![Write("foo"), Write("bar"), Sleep(120), WriteLn("baz")],
+        vec![Write("foo"), Write("bar"), Sleep(150), WriteLn("baz")],
         vec![Line("foobarbaz")]
         ; "single line, sleep in the middle"
     )]
