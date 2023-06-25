@@ -43,6 +43,8 @@ struct TestStats {
 }
 
 impl TestStats {
+    // This is only used in tests.
+    #[allow(dead_code)]
     fn new() -> Self {
         Self { wakeups: 0 }
     }
@@ -159,7 +161,7 @@ fn run(
         let output = Arc::new(Mutex::new(output));
 
         let finished = Arc::new(RwLock::new(false));
-        let c_last_spacer = last_spacer.clone();
+        let c_last_spacer = last_spacer;
         let c_last_line = last_line.clone();
         let c_args = args.clone();
         let c_finished = finished.clone();
