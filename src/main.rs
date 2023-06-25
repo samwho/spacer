@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use lazy_static::lazy_static;
+use log::debug;
 use owo_colors::{self, OwoColorize, Stream};
 use std::{
     io::{stdin, BufRead},
@@ -69,6 +70,8 @@ fn format_elapsed(seconds: f64) -> String {
 
 fn print_spacer(args: &Args, last_spacer: &Instant) -> Result<()> {
     let (width, _) = terminal_size::terminal_size().unwrap_or((Width(80), Height(24)));
+    debug!("terminal width: {:?}", width);
+
     let mut dashes: usize = width.0.into();
 
     if args.padding > 0 {
@@ -141,8 +144,10 @@ impl Spacer {
         let c_last_line = self.last_line.clone();
         let c_args = self.args.clone();
         let c_finished = finished.clone();
+
         let thread = spawn(move || loop {
             if *c_finished.read().unwrap() {
+                debug!("thread received finish signal, exiting");
                 break;
             }
 
@@ -151,6 +156,8 @@ impl Spacer {
             if *last_spacer >= *last_line {
                 drop(last_line);
                 drop(last_spacer);
+
+                debug!("last spacer is newer than last line, sleeping");
 
                 // We sleep here because we know that we're going to sleep for
                 // a bare minimum of the --after interval.
@@ -164,6 +171,7 @@ impl Spacer {
             drop(last_line);
 
             if elapsed_since_line >= c_args.after {
+                debug!("last line is older than --after, printing spacer");
                 print_spacer(&c_args, &last_spacer).unwrap();
                 drop(last_spacer);
                 let mut last_spacer = c_last_spacer.write().unwrap();
@@ -176,10 +184,16 @@ impl Spacer {
                     (c_args.after * 1000.0) as u64,
                 ));
             } else {
+                let sleep_for = c_args.after - elapsed_since_line;
+                debug!(
+                    "last line is newer than --after, sleeping for {:.2}s",
+                    sleep_for
+                );
+
                 // We sleep for as long as it takes to get to the number of
                 // seconds --after the last line was printed.
                 sleep(std::time::Duration::from_millis(
-                    ((elapsed_since_line - c_args.after) * 1000.0) as u64,
+                    (sleep_for * 1000.0) as u64,
                 ));
             }
         });
@@ -192,18 +206,25 @@ impl Spacer {
             println!("{}", line);
         }
 
+        debug!("signalling thread to finish");
         let mut finished = finished.write().unwrap();
         *finished = true;
         drop(finished);
+
+        debug!("waiting for thread to finish");
         thread.join().unwrap();
+        debug!("thread finished, exiting");
 
         Ok(())
     }
 }
 
 fn main() -> Result<()> {
+    human_panic::setup_panic!();
+    env_logger::init();
+
     let args = Args::parse();
-    println!("{:?}", args);
+    debug!("args: {:?}", args);
 
     if args.force_color && args.no_color {
         eprintln!("--force-color and --no-color are mutually exclusive");

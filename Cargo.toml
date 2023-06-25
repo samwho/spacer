@@ -27,3 +27,6 @@ terminal_size = "0.2"
 time = { version = "0.3", features = ["local-offset", "formatting", "macros"] }
 lazy_static = "1.4"
 owo-colors = { version = "3", features = ["supports-colors"] }
+log = "0.4"
+env_logger = "0.10"
+human-panic = "1.0"
