@@ -4,9 +4,9 @@ use lazy_static::lazy_static;
 use log::debug;
 use owo_colors::{self, OwoColorize, Stream};
 use std::{
-    io::{stdin, BufRead},
-    sync::{Arc, RwLock},
-    thread::{sleep, spawn},
+    io::{stdin, stdout, BufRead, Write},
+    sync::{Arc, Mutex, RwLock},
+    thread::{scope, sleep},
 };
 use terminal_size::{Height, Width};
 use time::{
@@ -68,26 +68,28 @@ fn format_elapsed(seconds: f64) -> String {
     }
 }
 
-fn print_spacer(args: &Args, last_spacer: &Instant) -> Result<()> {
+fn print_spacer(output: impl Write, args: &Args, last_spacer: &Instant) -> Result<()> {
     let (width, _) = terminal_size::terminal_size().unwrap_or((Width(80), Height(24)));
     debug!("terminal width: {:?}", width);
 
     let mut dashes: usize = width.0.into();
 
     if args.padding > 0 {
-        println!("{}", "\n".repeat(args.padding));
+        writeln!(output, "{}", "\n".repeat(args.padding));
     }
 
     let now = OffsetDateTime::now_local().unwrap_or(OffsetDateTime::now_utc());
     let date_str = now.format(&DATE_FORMAT)?;
-    print!(
+    write!(
+        output,
         "{} ",
         date_str.if_supports_color(Stream::Stdout, |t| t.green())
     );
     dashes -= date_str.len() + 1;
 
     let time_str = now.format(&TIME_FORMAT)?;
-    print!(
+    write!(
+        output,
         "{} ",
         time_str.if_supports_color(Stream::Stdout, |t| t.yellow())
     );
@@ -96,14 +98,16 @@ fn print_spacer(args: &Args, last_spacer: &Instant) -> Result<()> {
     let elapsed_seconds = last_spacer.elapsed().as_seconds_f64();
     if elapsed_seconds > 0.1 {
         let elapsed = format_elapsed(elapsed_seconds);
-        print!(
+        write!(
+            output,
             "{} ",
             elapsed.if_supports_color(Stream::Stdout, |t| t.blue())
         );
         dashes -= elapsed.len() + 1;
     }
 
-    print!(
+    writeln!(
+        output,
         "{}",
         args.dash
             .to_string()
@@ -111,41 +115,41 @@ fn print_spacer(args: &Args, last_spacer: &Instant) -> Result<()> {
             .as_str()
             .if_supports_color(Stream::Stdout, |t| t.dimmed())
     );
-    println!();
+    writeln!(output);
 
     if args.padding > 0 {
-        println!("{}", "\n".repeat(args.padding));
+        writeln!(output, "{}", "\n".repeat(args.padding));
     }
 
     Ok(())
 }
 
-// Define our custom error type
-struct Spacer {
-    args: Args,
-    last_spacer: Arc<RwLock<Instant>>,
-    last_line: Arc<RwLock<Instant>>,
-}
-
-impl Spacer {
-    fn new(args: Args) -> Result<Self> {
-        let spacer = Self {
-            args,
-            last_line: Arc::new(RwLock::new(Instant::now())),
-            last_spacer: Arc::new(RwLock::new(Instant::now())),
-        };
-
-        Ok(spacer)
+fn run(input: impl BufRead, output: impl Write, args: Args) -> Result<()> {
+    if args.force_color && args.no_color {
+        eprintln!("--force-color and --no-color are mutually exclusive");
+        std::process::exit(1);
     }
 
-    fn run(&mut self) -> Result<()> {
-        let finished = Arc::new(RwLock::new(false));
-        let c_last_spacer = self.last_spacer.clone();
-        let c_last_line = self.last_line.clone();
-        let c_args = self.args.clone();
-        let c_finished = finished.clone();
+    if args.no_color {
+        owo_colors::set_override(false);
+    }
 
-        let thread = spawn(move || loop {
+    if args.force_color {
+        owo_colors::set_override(true);
+    }
+
+    let last_line = Arc::new(RwLock::new(Instant::now()));
+    let last_spacer = Arc::new(RwLock::new(Instant::now()));
+
+    let finished = Arc::new(RwLock::new(false));
+    let c_last_spacer = last_spacer.clone();
+    let c_last_line = last_line.clone();
+    let c_args = args.clone();
+    let c_finished = finished.clone();
+    let c_output = Arc::new(Mutex::new(output));
+
+    scope(|s| {
+        s.spawn(move || loop {
             if *c_finished.read().unwrap() {
                 debug!("thread received finish signal, exiting");
                 break;
@@ -172,8 +176,11 @@ impl Spacer {
 
             if elapsed_since_line >= c_args.after {
                 debug!("last line is older than --after, printing spacer");
-                print_spacer(&c_args, &last_spacer).unwrap();
-                drop(last_spacer);
+
+                let mut output = c_output.lock().unwrap();
+                print_spacer(&mut output, &c_args, &last_spacer).unwrap();
+                drop(output);
+
                 let mut last_spacer = c_last_spacer.write().unwrap();
                 last_spacer.clone_from(&Instant::now());
                 drop(last_spacer);
@@ -198,12 +205,12 @@ impl Spacer {
             }
         });
 
-        for line in stdin().lock().lines() {
+        for line in input.lines() {
             let line = line.context("Failed to read line")?;
-            let mut last_line = self.last_line.write().unwrap();
+            let mut last_line = last_line.write().unwrap();
             last_line.clone_from(&Instant::now());
             drop(last_line);
-            println!("{}", line);
+            writeln!(c_output.lock().unwrap(), "{}", line)?;
         }
 
         debug!("signalling thread to finish");
@@ -211,12 +218,8 @@ impl Spacer {
         *finished = true;
         drop(finished);
 
-        debug!("waiting for thread to finish");
-        thread.join().unwrap();
-        debug!("thread finished, exiting");
-
         Ok(())
-    }
+    })
 }
 
 fn main() -> Result<()> {
@@ -226,19 +229,5 @@ fn main() -> Result<()> {
     let args = Args::parse();
     debug!("args: {:?}", args);
 
-    if args.force_color && args.no_color {
-        eprintln!("--force-color and --no-color are mutually exclusive");
-        std::process::exit(1);
-    }
-
-    if args.no_color {
-        owo_colors::set_override(false);
-    }
-
-    if args.force_color {
-        owo_colors::set_override(true);
-    }
-
-    let mut app = Spacer::new(args)?;
-    app.run()
+    run(&mut stdin().lock(), &mut stdout(), args)
 }
