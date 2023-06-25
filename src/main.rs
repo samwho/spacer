@@ -322,14 +322,14 @@ mod tests {
     }
 
     #[test_case(vec![], vec![] ; "no output")]
-    #[test_case(vec![Sleep(150)], vec![] ; "no output, after sleep")]
+    #[test_case(vec![Sleep(200)], vec![] ; "no output, after sleep")]
     #[test_case(
-        vec![WriteLn("foo"), Sleep(150)],
+        vec![WriteLn("foo"), Sleep(200)],
         vec![Line("foo"), Spacer]
         ; "single line"
     )]
     #[test_case(
-        vec![WriteLn("foo"), Sleep(150), WriteLn("bar"), WriteLn("baz"), Sleep(150)],
+        vec![WriteLn("foo"), Sleep(200), WriteLn("bar"), WriteLn("baz"), Sleep(200)],
         vec![Line("foo"), Spacer, Line("bar"), Line("baz"), Spacer]
         ; "multiple lines"
     )]
@@ -339,7 +339,7 @@ mod tests {
         ; "multiple lines, no sleeps"
     )]
     #[test_case(
-        vec![Write("foo"), Write("bar"), Sleep(150), WriteLn("baz")],
+        vec![Write("foo"), Write("bar"), Sleep(200), WriteLn("baz")],
         vec![Line("foobarbaz")]
         ; "single line, sleep in the middle"
     )]
@@ -369,7 +369,13 @@ mod tests {
 
         let output = String::from_utf8(output)?;
         let lines = output.lines().collect::<Vec<_>>();
-        assert_eq!(lines.len(), out.len());
+        assert_eq!(
+            lines.len(),
+            out.len(),
+            "wrong number of lines, expected {} got {:?}",
+            out.len(),
+            lines
+        );
         for (line, out) in lines.iter().zip(out.iter()) {
             match out {
                 Line(expected) => assert_eq!(line, expected),
