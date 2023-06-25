@@ -4,7 +4,6 @@ use lazy_static::lazy_static;
 use log::debug;
 use owo_colors::{self, OwoColorize, Stream};
 use std::{
-    cmp::max,
     io::{stdin, stdout, BufRead, Write},
     ops::DerefMut,
     sync::{Arc, Mutex, RwLock},
