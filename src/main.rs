@@ -238,7 +238,9 @@ fn run(
             let mut last_line = last_line.write().unwrap();
             last_line.clone_from(&Instant::now());
             drop(last_line);
-            writeln!(output.lock().unwrap(), "{}", line)?;
+            let mut out = output.lock().unwrap();
+            writeln!(out, "{}", line)?;
+            drop(out);
         }
 
         debug!("signalling thread to finish");
@@ -322,14 +324,14 @@ mod tests {
     }
 
     #[test_case(vec![], vec![] ; "no output")]
-    #[test_case(vec![Sleep(200)], vec![] ; "no output, after sleep")]
+    #[test_case(vec![Sleep(300)], vec![] ; "no output, after sleep")]
     #[test_case(
-        vec![WriteLn("foo"), Sleep(200)],
+        vec![WriteLn("foo"), Sleep(300)],
         vec![Line("foo"), Spacer]
         ; "single line"
     )]
     #[test_case(
-        vec![WriteLn("foo"), Sleep(200), WriteLn("bar"), WriteLn("baz"), Sleep(200)],
+        vec![WriteLn("foo"), Sleep(300), WriteLn("bar"), WriteLn("baz"), Sleep(300)],
         vec![Line("foo"), Spacer, Line("bar"), Line("baz"), Spacer]
         ; "multiple lines"
     )]
@@ -339,7 +341,7 @@ mod tests {
         ; "multiple lines, no sleeps"
     )]
     #[test_case(
-        vec![Write("foo"), Write("bar"), Sleep(200), WriteLn("baz")],
+        vec![Write("foo"), Write("bar"), Sleep(300), WriteLn("baz")],
         vec![Line("foobarbaz")]
         ; "single line, sleep in the middle"
     )]
