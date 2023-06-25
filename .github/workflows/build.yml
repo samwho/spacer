@@ -89,7 +89,6 @@ jobs:
 
   cargo_audit:
     name: Cargo Audit [Security]
-    needs: cargo_check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
