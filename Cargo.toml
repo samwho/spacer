@@ -18,6 +18,11 @@ include = [
 [badges]
 maintenance = { status = "passively-maintained" }
 
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -27,3 +32,9 @@ terminal_size = "0.2"
 time = { version = "0.3", features = ["local-offset", "formatting", "macros"] }
 lazy_static = "1.4"
 owo-colors = { version = "3", features = ["supports-colors"] }
+log = "0.4"
+env_logger = "0.10"
+human-panic = "1.0"
+
+[dev-dependencies]
+test-case = "3"
