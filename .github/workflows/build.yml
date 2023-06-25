@@ -5,10 +5,7 @@ on:
     paths-ignore:
       - "docs/**"
       - "**.md"
-  pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "**.md"
+      - "LICENSE"
 
 jobs:
   # Ensure that the project could be successfully compiled
@@ -22,6 +19,18 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+      - name: Set up cargo cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
       - uses: actions-rs/cargo@v1
         with:
           command: check
@@ -61,30 +70,35 @@ jobs:
           toolchain: stable
           components: clippy
           override: true
+      - name: Set up cargo cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-targets --all-features -- -D clippy::all
 
-  # Run a security audit on dependencies
   cargo_audit:
     name: Cargo Audit [Security]
     needs: cargo_check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v1
+      - uses: actions-rs/audit-check@v1
         with:
-          toolchain: stable
-          override: true
-      - run: cargo install --force cargo-audit
-      - run: cargo generate-lockfile
-      - uses: actions-rs/cargo@v1
-        with:
-          command: audit
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   test:
-    needs: [cargo_check]
+    needs: [cargo_check, rustfmt, clippy]
     name: Tests
     runs-on: ${{ matrix.os }}
     strategy:
@@ -99,6 +113,18 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.rust }}
           override: true
+      - name: Set up cargo cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
       - uses: actions-rs/cargo@v1
         with:
           command: test
@@ -168,7 +194,7 @@ jobs:
   github_release:
     if: startsWith(github.ref, 'refs/tags/v')
     name: Create GitHub Release
-    needs: [test, github_build]
+    needs: [test, github_build, cargo_audit]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -213,7 +239,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   cargo_publish:
-    needs: test
+    needs: [test, cargo_audit]
     if: startsWith(github.ref, 'refs/tags/v')
     name: Publish Cargo Package
     runs-on: ubuntu-latest
