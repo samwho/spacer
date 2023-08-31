@@ -1,6 +1,6 @@
 [package]
 name = "spacer"
-version = "0.1.8"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 authors = ["Sam Rose <hello@samwho.dev>"]
@@ -8,12 +8,7 @@ keywords = ["cli"]
 categories = ["command-line-utilities"]
 repository = "https://github.com/samwho/spacer"
 description = "A CLI utility for adding spacers when command output stops"
-include = [
-    "Cargo.toml",
-    "LICENSE",
-    "README.md",
-    "**/*.rs",
-]
+include = ["Cargo.toml", "LICENSE", "README.md", "**/*.rs"]
 
 [badges]
 maintenance = { status = "passively-maintained" }
