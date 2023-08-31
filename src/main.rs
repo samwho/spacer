@@ -15,7 +15,7 @@ use time::{
     UtcOffset,
 };
 
-#[derive(Parser, Clone, Debug, Default)]
+#[derive(Parser, Clone, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Minimum number of seconds that have to pass before a spacer is printed
@@ -37,6 +37,10 @@ struct Args {
     /// Force the output to be colorized, even if the output is not a TTY
     #[arg(long, group = "color-overrides", default_value = "false")]
     force_color: bool,
+
+    /// Put the timestamp on the right side of the spacer.
+    #[arg(long, default_value = "false")]
+    right: bool,
 }
 
 struct TestStats {
@@ -98,8 +102,9 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
 
     let now = OffsetDateTime::now_utc().to_offset(LOCAL_OFFSET.unwrap_or(UtcOffset::UTC));
     let date_str = now.format(&DATE_FORMAT)?;
+    let mut buf = Vec::new();
     write!(
-        output,
+        buf,
         "{} ",
         date_str.if_supports_color(Stream::Stdout, |t| t.green())
     )?;
@@ -107,7 +112,7 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
 
     let time_str = now.format(&TIME_FORMAT)?;
     write!(
-        output,
+        buf,
         "{} ",
         time_str.if_supports_color(Stream::Stdout, |t| t.yellow())
     )?;
@@ -117,22 +122,39 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
     if elapsed_seconds > 0.1 {
         let elapsed = format_elapsed(elapsed_seconds);
         write!(
-            output,
+            buf,
             "{} ",
             elapsed.if_supports_color(Stream::Stdout, |t| t.blue())
         )?;
         dashes -= elapsed.len() + 1;
     }
 
-    writeln!(
-        output,
-        "{}",
-        args.dash
-            .to_string()
-            .repeat(dashes)
-            .as_str()
-            .if_supports_color(Stream::Stdout, |t| t.dimmed())
-    )?;
+    buf.pop(); // Remove trailing space
+    let info = String::from_utf8(buf)?;
+
+    if args.right {
+        write!(
+            output,
+            "{} ",
+            args.dash
+                .to_string()
+                .repeat(dashes)
+                .as_str()
+                .if_supports_color(Stream::Stdout, |t| t.dimmed())
+        )?;
+        writeln!(output, "{}", info)?;
+    } else {
+        write!(output, "{} ", info)?;
+        writeln!(
+            output,
+            "{}",
+            args.dash
+                .to_string()
+                .repeat(dashes)
+                .as_str()
+                .if_supports_color(Stream::Stdout, |t| t.dimmed())
+        )?;
+    }
 
     if args.padding > 0 {
         writeln!(output, "{}", "\n".repeat(args.padding))?;
@@ -290,6 +312,7 @@ mod tests {
     enum Out {
         Line(&'static str),
         Spacer,
+        RightSpacer,
     }
 
     struct TimedInput {
@@ -332,43 +355,63 @@ mod tests {
         }
     }
 
-    #[test_case(vec![], vec![] ; "no output")]
-    #[test_case(vec![Sleep(300)], vec![] ; "no output, after sleep")]
+    fn test_args() -> Args {
+        Args {
+            after: 0.1,
+            dash: '-',
+            padding: 0,
+            no_color: true,
+            force_color: false,
+            right: false,
+        }
+    }
+
+    #[test_case(vec![], vec![], test_args() ; "no output")]
+    #[test_case(vec![Sleep(300)], vec![], test_args() ; "no output, after sleep")]
     #[test_case(
         vec![WriteLn("foo"), Sleep(300)],
-        vec![Line("foo"), Spacer]
+        vec![Line("foo"), Spacer],
+        test_args()
         ; "single line"
     )]
     #[test_case(
         vec![WriteLn("foo"), Sleep(300), WriteLn("bar"), WriteLn("baz"), Sleep(300)],
-        vec![Line("foo"), Spacer, Line("bar"), Line("baz"), Spacer]
+        vec![Line("foo"), Spacer, Line("bar"), Line("baz"), Spacer],
+        test_args()
         ; "multiple lines"
     )]
     #[test_case(
         vec![WriteLn("foo"), WriteLn("bar"), WriteLn("baz")],
-        vec![Line("foo"), Line("bar"), Line("baz")]
+        vec![Line("foo"), Line("bar"), Line("baz")],
+        test_args()
         ; "multiple lines, no sleeps"
     )]
     #[test_case(
         vec![Write("foo"), Write("bar"), Sleep(300), WriteLn("baz")],
-        vec![Line("foobarbaz")]
+        vec![Line("foobarbaz")],
+        test_args()
         ; "single line, sleep in the middle"
     )]
-    fn test_output(ops: Vec<Op>, out: Vec<Out>) -> Result<()> {
+    #[test_case(
+        vec![WriteLn("foo"), Sleep(300)],
+        vec![Line("foo"), RightSpacer],
+        Args {
+            after: 0.1,
+            dash: '-',
+            padding: 0,
+            no_color: true,
+            force_color: false,
+            right: true,
+        }
+        ; "single line, right spacer"
+    )]
+    fn test_output(ops: Vec<Op>, out: Vec<Out>, args: Args) -> Result<()> {
         let mut total_sleep_ms = 0;
         for op in ops.iter() {
             if let Sleep(duration) = op {
                 total_sleep_ms += duration;
             }
         }
-
-        let args = super::Args {
-            after: 0.1,
-            dash: '-',
-            padding: 0,
-            force_color: false,
-            no_color: true,
-        };
 
         let expected_wakeups = 2 + (total_sleep_ms as f64 / (args.after * 1000.0)).ceil() as usize;
 
@@ -391,6 +434,7 @@ mod tests {
             match out {
                 Line(expected) => assert_eq!(line, expected),
                 Spacer => assert!(line.ends_with("----")),
+                RightSpacer => assert!(line.starts_with("----")),
             }
         }
 
