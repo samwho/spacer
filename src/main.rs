@@ -12,6 +12,7 @@ use std::{
 use terminal_size::{Height, Width};
 use time::{
     format_description::OwnedFormatItem, macros::format_description, Instant, OffsetDateTime,
+    UtcOffset,
 };
 
 #[derive(Parser, Clone, Debug, Default)]
@@ -52,8 +53,12 @@ impl TestStats {
 
 lazy_static! {
     static ref DATE_FORMAT: OwnedFormatItem = format_description!("[year]-[month]-[day]").into();
-    static ref TIME_FORMAT: OwnedFormatItem =
-        format_description!("[hour]:[minute]:[second]").into();
+    static ref TIME_FORMAT: OwnedFormatItem = format_description!(
+        "[hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]"
+    )
+    .into();
+    static ref LOCAL_OFFSET: Option<UtcOffset> =
+        UtcOffset::local_offset_at(OffsetDateTime::UNIX_EPOCH).ok();
 }
 
 fn format_elapsed(seconds: f64) -> String {
@@ -91,7 +96,7 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
         writeln!(output, "{}", "\n".repeat(args.padding))?;
     }
 
-    let now = OffsetDateTime::now_local().unwrap_or(OffsetDateTime::now_utc());
+    let now = OffsetDateTime::now_utc().to_offset(LOCAL_OFFSET.unwrap_or(UtcOffset::UTC));
     let date_str = now.format(&DATE_FORMAT)?;
     write!(
         output,
@@ -153,6 +158,10 @@ fn run(
 
     if args.force_color {
         owo_colors::set_override(true);
+    }
+
+    if LOCAL_OFFSET.is_none() {
+        debug!("could not determine local timezone offset, using UTC");
     }
 
     scope(|s| {
