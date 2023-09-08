@@ -16,7 +16,6 @@ is for you!
 With Homebrew:
 
 ```bash
-brew tap samwho/spacer
 brew install spacer
 ```
 
