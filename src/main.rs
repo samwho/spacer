@@ -97,7 +97,7 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
     let mut dashes: usize = width.0.into();
 
     if args.padding > 0 {
-        writeln!(output, "{}", "\n".repeat(args.padding))?;
+        writeln!(output, "{}", "\n".repeat(args.padding - 1))?;
     }
 
     let now = OffsetDateTime::now_utc().to_offset(LOCAL_OFFSET.unwrap_or(UtcOffset::UTC));
@@ -157,7 +157,7 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
     }
 
     if args.padding > 0 {
-        writeln!(output, "{}", "\n".repeat(args.padding))?;
+        writeln!(output, "{}", "\n".repeat(args.padding - 1))?;
     }
 
     Ok(())
