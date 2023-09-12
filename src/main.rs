@@ -104,7 +104,7 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
         let now: DateTime<Tz> = Local::now().with_timezone(&timezone);
         (
             now.format("%Y-%m-%d").to_string(),
-            now.format("%H:%M:%S").to_string(),
+            now.format("%H:%M:%S %Z").to_string(),
         )
     };
 
