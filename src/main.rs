@@ -405,6 +405,32 @@ mod tests {
         }
         ; "single line, right spacer"
     )]
+    #[test_case(
+        vec![WriteLn("foo"), Sleep(300)],
+        vec![Line("foo"), Line(""), Spacer, Line("")],
+        Args {
+            after: 0.1,
+            dash: '-',
+            padding: 1,
+            no_color: true,
+            force_color: false,
+            right: false,
+        }
+        ; "padding = 1"
+    )]
+    #[test_case(
+        vec![WriteLn("foo"), Sleep(300)],
+        vec![Line("foo"), Line(""), Line(""), Spacer, Line(""), Line("")],
+        Args {
+            after: 0.1,
+            dash: '-',
+            padding: 2,
+            no_color: true,
+            force_color: false,
+            right: false,
+        }
+        ; "padding = 2"
+    )]
     fn test_output(ops: Vec<Op>, out: Vec<Out>, args: Args) -> Result<()> {
         let mut total_sleep_ms = 0;
         for op in ops.iter() {
