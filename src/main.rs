@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
-use chrono::Local;
+use chrono::{DateTime, Local};
+use chrono_tz::Tz;
 use clap::Parser;
 use log::debug;
 use owo_colors::{self, OwoColorize, Stream};
@@ -38,6 +39,10 @@ struct Args {
     /// Put the timestamp on the right side of the spacer.
     #[arg(long, default_value = "false")]
     right: bool,
+
+    /// Print timestamp in an arbitrary timezone (in IANA format, e.g. Europe/London).
+    #[arg(long)]
+    timezone: Option<String>,
 }
 
 struct TestStats {
@@ -87,8 +92,23 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
         writeln!(output, "{}", "\n".repeat(args.padding - 1))?;
     }
 
-    let now = Local::now();
-    let date_str = now.format("%Y-%m-%d").to_string();
+    let datetime_strings = if args.timezone.is_none() {
+        let now: DateTime<Local> = Local::now();
+        (
+            now.format("%Y-%m-%d").to_string(),
+            now.format("%H:%M:%S").to_string(),
+        )
+    } else {
+        let timezone_str = args.timezone.clone();
+        let timezone: Tz = timezone_str.unwrap().parse().expect("Invalid timezone");
+        let now: DateTime<Tz> = Local::now().with_timezone(&timezone);
+        (
+            now.format("%Y-%m-%d").to_string(),
+            now.format("%H:%M:%S").to_string(),
+        )
+    };
+
+    let date_str = datetime_strings.0;
     let mut buf = Vec::new();
     write!(
         buf,
@@ -97,7 +117,7 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
     )?;
     dashes -= date_str.len() + 1;
 
-    let time_str = now.format("%H:%M:%S").to_string();
+    let time_str = datetime_strings.1;
     write!(
         buf,
         "{} ",
