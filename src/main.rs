@@ -366,6 +366,7 @@ mod tests {
             no_color: true,
             force_color: false,
             right: false,
+            timezone: None,
         }
     }
 
@@ -405,6 +406,7 @@ mod tests {
             no_color: true,
             force_color: false,
             right: true,
+            timezone: None,
         }
         ; "single line, right spacer"
     )]
@@ -418,6 +420,7 @@ mod tests {
             no_color: true,
             force_color: false,
             right: false,
+            timezone: None,
         }
         ; "padding = 1"
     )]
@@ -431,6 +434,7 @@ mod tests {
             no_color: true,
             force_color: false,
             right: false,
+            timezone: None,
         }
         ; "padding = 2"
     )]
