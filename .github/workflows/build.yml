@@ -6,6 +6,7 @@ on:
       - "docs/**"
       - "**.md"
       - "LICENSE"
+  pull_request:
 
 jobs:
   # Ensure that the project could be successfully compiled
