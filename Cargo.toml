@@ -1,6 +1,6 @@
 [package]
 name = "spacer"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license = "MIT"
 authors = ["Sam Rose <hello@samwho.dev>"]
@@ -24,7 +24,7 @@ codegen-units = 1
 clap = { version = "4.3", features = ["derive"] }
 anyhow = "1.0"
 terminal_size = "0.2"
-time = { version = "0.3", features = ["local-offset", "formatting", "macros"] }
+time = { version = "0.3" }
 lazy_static = "1.4"
 owo-colors = { version = "3", features = ["supports-colors"] }
 log = "0.4"
