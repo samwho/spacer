@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
+use chrono::Local;
 use clap::Parser;
-use lazy_static::lazy_static;
 use log::debug;
 use owo_colors::{self, OwoColorize, Stream};
 use std::{
@@ -10,10 +10,7 @@ use std::{
     thread::{scope, sleep},
 };
 use terminal_size::{Height, Width};
-use time::{
-    format_description::OwnedFormatItem, macros::format_description, Instant, OffsetDateTime,
-    UtcOffset,
-};
+use time::Instant;
 
 #[derive(Parser, Clone, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -55,16 +52,6 @@ impl TestStats {
     }
 }
 
-lazy_static! {
-    static ref DATE_FORMAT: OwnedFormatItem = format_description!("[year]-[month]-[day]").into();
-    static ref TIME_FORMAT: OwnedFormatItem = format_description!(
-        "[hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]"
-    )
-    .into();
-    static ref LOCAL_OFFSET: Option<UtcOffset> =
-        UtcOffset::local_offset_at(OffsetDateTime::UNIX_EPOCH).ok();
-}
-
 fn format_elapsed(seconds: f64) -> String {
     let minutes = seconds / 60.0;
     let hours = minutes / 60.0;
@@ -100,8 +87,8 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
         writeln!(output, "{}", "\n".repeat(args.padding - 1))?;
     }
 
-    let now = OffsetDateTime::now_utc().to_offset(LOCAL_OFFSET.unwrap_or(UtcOffset::UTC));
-    let date_str = now.format(&DATE_FORMAT)?;
+    let now = Local::now();
+    let date_str = now.format("%Y-%m-%d").to_string();
     let mut buf = Vec::new();
     write!(
         buf,
@@ -110,7 +97,7 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
     )?;
     dashes -= date_str.len() + 1;
 
-    let time_str = now.format(&TIME_FORMAT)?;
+    let time_str = now.format("%H:%M:%S").to_string();
     write!(
         buf,
         "{} ",
@@ -180,10 +167,6 @@ fn run(
 
     if args.force_color {
         owo_colors::set_override(true);
-    }
-
-    if LOCAL_OFFSET.is_none() {
-        debug!("could not determine local timezone offset, using UTC");
     }
 
     scope(|s| {

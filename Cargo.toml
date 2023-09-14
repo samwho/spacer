@@ -30,6 +30,7 @@ owo-colors = { version = "3", features = ["supports-colors"] }
 log = "0.4"
 env_logger = "0.10"
 human-panic = "1.0"
+chrono = "0.4.30"
 
 [dev-dependencies]
 test-case = "3"
