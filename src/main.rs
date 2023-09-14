@@ -92,20 +92,32 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
         writeln!(output, "{}", "\n".repeat(args.padding - 1))?;
     }
 
-    let datetime_strings = if args.timezone.is_none() {
-        let now: DateTime<Local> = Local::now();
-        (
-            now.format("%Y-%m-%d").to_string(),
-            now.format("%H:%M:%S").to_string(),
-        )
-    } else {
-        let timezone_str = args.timezone.clone();
-        let timezone: Tz = timezone_str.unwrap().parse().expect("Invalid timezone");
-        let now: DateTime<Tz> = Local::now().with_timezone(&timezone);
-        (
-            now.format("%Y-%m-%d").to_string(),
-            now.format("%H:%M:%S %Z").to_string(),
-        )
+    let datetime_strings = match args.timezone.clone() {
+        None => {
+            let now: DateTime<Local> = Local::now();
+            (
+                now.format("%Y-%m-%d").to_string(),
+                now.format("%H:%M:%S").to_string(),
+            )
+        }
+        Some(timezone_str) => match timezone_str.parse::<Tz>() {
+            Ok(timezone) => {
+                let now: DateTime<Tz> = Local::now().with_timezone(&timezone);
+                (
+                    now.format("%Y-%m-%d").to_string(),
+                    now.format("%H:%M:%S %Z").to_string(),
+                )
+            }
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                debug!("could not parse supplied timezone name, using local time");
+                let now: DateTime<Local> = Local::now();
+                (
+                    now.format("%Y-%m-%d").to_string(),
+                    now.format("%H:%M:%S").to_string(),
+                )
+            }
+        },
     };
 
     let date_str = datetime_strings.0;
