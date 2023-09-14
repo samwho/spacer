@@ -301,6 +301,7 @@ mod tests {
     use self::Op::*;
     use self::Out::*;
     use super::*;
+    use regex::Regex;
     use std::io::{BufReader, Read};
     use std::thread::sleep;
     use std::time::Duration;
@@ -316,6 +317,8 @@ mod tests {
         Line(&'static str),
         Spacer,
         RightSpacer,
+        SpacerWithLondonTimezone,
+        RightSpacerWithLondonTimezone,
     }
 
     struct TimedInput {
@@ -438,6 +441,34 @@ mod tests {
         }
         ; "padding = 2"
     )]
+    #[test_case(
+        vec![WriteLn("foo"), Sleep(300)],
+        vec![Line("foo"), SpacerWithLondonTimezone],
+        Args {
+            after: 0.1,
+            dash: '-',
+            padding: 0,
+            no_color: true,
+            force_color: false,
+            right: false,
+            timezone: Some("Europe/London".to_string()),
+        }
+        ; "with timezone"
+    )]
+    #[test_case(
+        vec![WriteLn("foo"), Sleep(300)],
+        vec![Line("foo"), RightSpacerWithLondonTimezone],
+        Args {
+            after: 0.1,
+            dash: '-',
+            padding: 0,
+            no_color: true,
+            force_color: false,
+            right: true,
+            timezone: Some("Europe/London".to_string()),
+        }
+        ; "right spacer with timezone"
+    )]
     fn test_output(ops: Vec<Op>, out: Vec<Out>, args: Args) -> Result<()> {
         let mut total_sleep_ms = 0;
         for op in ops.iter() {
@@ -468,6 +499,16 @@ mod tests {
                 Line(expected) => assert_eq!(line, expected),
                 Spacer => assert!(line.ends_with("----")),
                 RightSpacer => assert!(line.starts_with("----")),
+                SpacerWithLondonTimezone => {
+                    let re = Regex::new(r"GMT|BST").unwrap();
+                    assert!(re.is_match(line));
+                    assert!(line.ends_with("----"));
+                }
+                RightSpacerWithLondonTimezone => {
+                    let re = Regex::new(r"GMT|BST").unwrap();
+                    assert!(re.is_match(line));
+                    assert!(line.starts_with("----"));
+                }
             }
         }
 
