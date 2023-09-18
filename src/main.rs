@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
-use chrono::Local;
+use chrono::{DateTime, Local};
+use chrono_tz::Tz;
 use clap::Parser;
 use log::debug;
 use owo_colors::{self, OwoColorize, Stream};
@@ -38,6 +39,10 @@ struct Args {
     /// Put the timestamp on the right side of the spacer.
     #[arg(long, default_value = "false")]
     right: bool,
+
+    /// Print timestamp in an arbitrary timezone (in IANA format, e.g. Europe/London).
+    #[arg(long)]
+    timezone: Option<String>,
 }
 
 struct TestStats {
@@ -87,8 +92,35 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
         writeln!(output, "{}", "\n".repeat(args.padding - 1))?;
     }
 
-    let now = Local::now();
-    let date_str = now.format("%Y-%m-%d").to_string();
+    let datetime_strings = match args.timezone.clone() {
+        None => {
+            let now: DateTime<Local> = Local::now();
+            (
+                now.format("%Y-%m-%d").to_string(),
+                now.format("%H:%M:%S").to_string(),
+            )
+        }
+        Some(timezone_str) => match timezone_str.parse::<Tz>() {
+            Ok(timezone) => {
+                let now: DateTime<Tz> = Local::now().with_timezone(&timezone);
+                (
+                    now.format("%Y-%m-%d").to_string(),
+                    now.format("%H:%M:%S %Z").to_string(),
+                )
+            }
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                debug!("could not parse supplied timezone name, using local time");
+                let now: DateTime<Local> = Local::now();
+                (
+                    now.format("%Y-%m-%d").to_string(),
+                    now.format("%H:%M:%S").to_string(),
+                )
+            }
+        },
+    };
+
+    let date_str = datetime_strings.0;
     let mut buf = Vec::new();
     write!(
         buf,
@@ -97,7 +129,7 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
     )?;
     dashes -= date_str.len() + 1;
 
-    let time_str = now.format("%H:%M:%S").to_string();
+    let time_str = datetime_strings.1;
     write!(
         buf,
         "{} ",
@@ -281,6 +313,7 @@ mod tests {
     use self::Op::*;
     use self::Out::*;
     use super::*;
+    use regex::Regex;
     use std::io::{BufReader, Read};
     use std::thread::sleep;
     use std::time::Duration;
@@ -296,6 +329,8 @@ mod tests {
         Line(&'static str),
         Spacer,
         RightSpacer,
+        SpacerWithLondonTimezone,
+        RightSpacerWithLondonTimezone,
     }
 
     struct TimedInput {
@@ -346,6 +381,7 @@ mod tests {
             no_color: true,
             force_color: false,
             right: false,
+            timezone: None,
         }
     }
 
@@ -385,6 +421,7 @@ mod tests {
             no_color: true,
             force_color: false,
             right: true,
+            timezone: None,
         }
         ; "single line, right spacer"
     )]
@@ -398,6 +435,7 @@ mod tests {
             no_color: true,
             force_color: false,
             right: false,
+            timezone: None,
         }
         ; "padding = 1"
     )]
@@ -411,8 +449,37 @@ mod tests {
             no_color: true,
             force_color: false,
             right: false,
+            timezone: None,
         }
         ; "padding = 2"
+    )]
+    #[test_case(
+        vec![WriteLn("foo"), Sleep(300)],
+        vec![Line("foo"), SpacerWithLondonTimezone],
+        Args {
+            after: 0.1,
+            dash: '-',
+            padding: 0,
+            no_color: true,
+            force_color: false,
+            right: false,
+            timezone: Some("Europe/London".to_string()),
+        }
+        ; "with timezone"
+    )]
+    #[test_case(
+        vec![WriteLn("foo"), Sleep(300)],
+        vec![Line("foo"), RightSpacerWithLondonTimezone],
+        Args {
+            after: 0.1,
+            dash: '-',
+            padding: 0,
+            no_color: true,
+            force_color: false,
+            right: true,
+            timezone: Some("Europe/London".to_string()),
+        }
+        ; "right spacer with timezone"
     )]
     fn test_output(ops: Vec<Op>, out: Vec<Out>, args: Args) -> Result<()> {
         let mut total_sleep_ms = 0;
@@ -444,6 +511,16 @@ mod tests {
                 Line(expected) => assert_eq!(line, expected),
                 Spacer => assert!(line.ends_with("----")),
                 RightSpacer => assert!(line.starts_with("----")),
+                SpacerWithLondonTimezone => {
+                    let re = Regex::new(r"GMT|BST").unwrap();
+                    assert!(re.is_match(line));
+                    assert!(line.ends_with("----"));
+                }
+                RightSpacerWithLondonTimezone => {
+                    let re = Regex::new(r"GMT|BST").unwrap();
+                    assert!(re.is_match(line));
+                    assert!(line.starts_with("----"));
+                }
             }
         }
 
