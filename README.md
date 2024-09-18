@@ -43,8 +43,9 @@ Some commands output most of their information on STDERR, not STDOUT. `spacer`
 only monitors STDOUT, so if you find a situation where `spacer` doesn't seem
 to be working it could be that the program you're piping from is using STDERR.
 
-To "fix" that, redirect STDERR to STDOUT by using `2>&1` in your command:
+To "fix" that, pipe both STDERR to STDOUT to spacer by using `|&` instead of 
+`|` as the pipe characters:
 
 ```bash
-my-command 2>&1 | spacer
+my-command |& spacer
 ```
