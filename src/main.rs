@@ -314,7 +314,6 @@ mod tests {
     use self::Op::*;
     use self::Out::*;
     use super::*;
-    use regex::Regex;
     use std::io::{BufReader, Read};
     use std::thread::sleep;
     use std::time::Duration;
@@ -513,13 +512,11 @@ mod tests {
                 Spacer => assert!(line.ends_with("----")),
                 RightSpacer => assert!(line.starts_with("----")),
                 SpacerWithLondonTimezone => {
-                    let re = Regex::new(r"GMT|BST").unwrap();
-                    assert!(re.is_match(line));
+                    assert!(line.contains("GMT") || line.contains("BST"));
                     assert!(line.ends_with("----"));
                 }
                 RightSpacerWithLondonTimezone => {
-                    let re = Regex::new(r"GMT|BST").unwrap();
-                    assert!(re.is_match(line));
+                    assert!(line.contains("GMT") || line.contains("BST"));
                     assert!(line.starts_with("----"));
                 }
             }

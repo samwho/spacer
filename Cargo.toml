@@ -33,5 +33,4 @@ chrono = "0.4"
 chrono-tz = "0.10"
 
 [dev-dependencies]
-regex = "1"
 test-case = "3"

@@ -659,7 +659,6 @@ dependencies = [
  "lazy_static",
  "log",
  "owo-colors",
- "regex",
  "terminal_size",
  "test-case",
 ]
