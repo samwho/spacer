@@ -2,8 +2,10 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
 use chrono_tz::Tz;
 use clap::Parser;
+use human_panic::setup_panic;
 use log::debug;
 use owo_colors::{self, OwoColorize, Stream};
+use std::time::Instant;
 use std::{
     io::{stdin, stdout, BufRead, Write},
     ops::DerefMut,
@@ -11,7 +13,6 @@ use std::{
     thread::{scope, sleep},
 };
 use terminal_size::{Height, Width};
-use time::Instant;
 
 #[derive(Parser, Clone, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -137,7 +138,7 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
     )?;
     dashes -= time_str.len() + 1;
 
-    let elapsed_seconds = last_spacer.elapsed().as_seconds_f64();
+    let elapsed_seconds = last_spacer.elapsed().as_secs_f64();
     if elapsed_seconds > 0.1 {
         let elapsed = format_elapsed(elapsed_seconds);
         write!(
@@ -241,7 +242,7 @@ fn run(
                 continue;
             }
 
-            let elapsed_since_line = last_line.elapsed().as_seconds_f64();
+            let elapsed_since_line = last_line.elapsed().as_secs_f64();
             drop(last_line);
 
             if elapsed_since_line >= c_args.after {
@@ -299,7 +300,7 @@ fn run(
 }
 
 fn main() -> Result<()> {
-    human_panic::setup_panic!();
+    setup_panic!();
     env_logger::init();
 
     let args = Args::parse();

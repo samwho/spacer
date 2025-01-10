@@ -1,6 +1,6 @@
 [package]
 name = "spacer"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 license = "MIT"
 authors = ["Sam Rose <hello@samwho.dev>"]
@@ -23,15 +23,14 @@ codegen-units = 1
 [dependencies]
 clap = { version = "4.3", features = ["derive"] }
 anyhow = "1.0"
-terminal_size = "0.3"
-time = { version = "0.3" }
-lazy_static = "1.4"
-owo-colors = { version = "3", features = ["supports-colors"] }
+terminal_size = "0.4"
+lazy_static = "1.5"
+owo-colors = { version = "4", features = ["supports-colors"] }
 log = "0.4"
-env_logger = "0.10"
-human-panic = "1.0"
+env_logger = "0.11"
+human-panic = "2.0"
 chrono = "0.4"
-chrono-tz = "0.8"
+chrono-tz = "0.10"
 
 [dev-dependencies]
 regex = "1"
