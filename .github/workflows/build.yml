@@ -118,7 +118,7 @@ jobs:
           command: test
 
   github_build:
-    if: startsWith(github.ref, 'refs/tags/v')
+    # if: startsWith(github.ref, 'refs/tags/v')
     name: Build release binaries
     strategy:
       matrix:
@@ -127,6 +127,10 @@ jobs:
           - x86_64-unknown-linux-musl
           - x86_64-apple-darwin
           - x86_64-pc-windows-msvc
+          - aarch64-unknown-linux-gnu
+          - aarch64-unknown-linux-musl
+          - aarch64-apple-darwin
+          - aarch64-pc-windows-msvc
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-20.04
@@ -140,6 +144,18 @@ jobs:
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             name: spacer-x86_64-pc-windows-msvc.zip
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-20.04
+            name: spacer-aarch64-unknown-linux-gnu.tar.gz
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-20.04
+            name: spacer-aarch64-unknown-linux-musl.tar.gz
+          - target: aarch64-apple-darwin
+            os: macOS-latest
+            name: spacer-aarch64-apple-darwin.tar.gz
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            name: spacer-aarch64-pc-windows-msvc.zip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -207,9 +223,29 @@ jobs:
         with:
           name: spacer-x86_64-pc-windows-msvc.zip
           path: .
+      - name: Download releases from github_build
+        uses: actions/download-artifact@v4
+        with:
+          name: spacer-aarch64-unknown-linux-gnu.tar.gz
+          path: .
+      - name: Download releases from github_build
+        uses: actions/download-artifact@v4
+        with:
+          name: spacer-aarch64-unknown-linux-musl.tar.gz
+          path: .
+      - name: Download releases from github_build
+        uses: actions/download-artifact@v4
+        with:
+          name: spacer-aarch64-apple-darwin.tar.gz
+          path: .
+      - name: Download releases from github_build
+        uses: actions/download-artifact@v4
+        with:
+          name: spacer-aarch64-pc-windows-msvc.zip
+          path: .
 
       - name: Generate checksums
-        run: for file in spacer-*; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
+        run: for file in spacer-*; do openssl dgst -sha256 -r "$file" > "${file}.sha256"; done
 
       - name: Create GitHub release ${{ matrix.target }}
         uses: softprops/action-gh-release@v1
