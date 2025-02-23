@@ -275,24 +275,24 @@ jobs:
           makedepends=('rust' 'gcc' 'binutils')
           checkdepends=('rust' 'git')
           provides=(spacer)
-          source=("$pkgname-$pkgver.tar.gz::https://github.com/samwho/spacer/archive/v${pkgver}.tar.gz")
+          source=("\$pkgname-\$pkgver.tar.gz::https://github.com/samwho/spacer/archive/v\${pkgver}.tar.gz")
           sha256sums=('${{ steps.calculate_checksum.outputs.sha256 }}')
 
           build() {
-              cd "$pkgname-$pkgver"
+              cd "\$pkgname-\$pkgver"
               /usr/bin/cargo build --release
           }
 
           check() {
-              cd "$pkgname-$pkgver"
+              cd "\$pkgname-\$pkgver"
               /usr/bin/cargo test
           }
 
           package() {
-              cd "$pkgname-$pkgver"
+              cd "\$pkgname-\$pkgver"
               strip target/release/spacer
-              install -Dm755 "target/release/spacer" "$pkgdir/usr/bin/spacer"
-              install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+              install -Dm755 "target/release/spacer" "\$pkgdir/usr/bin/spacer"
+              install -Dm644 "LICENSE" "\$pkgdir/usr/share/licenses/\$pkgname/LICENSE"
           }
           EOF
 
@@ -350,11 +350,11 @@ jobs:
           checkdepends=()
           provides=(spacer)
           conflicts=(spacer)
-          source=("${pkgname}-v${pkgver}.tar.gz::https://github.com/samwho/spacer/releases/download/v${pkgver}/spacer-x86_64-unknown-linux-gnu.tar.gz")
+          source=("\${pkgname}-v\${pkgver}.tar.gz::https://github.com/samwho/spacer/releases/download/v${pkgver}/spacer-x86_64-unknown-linux-gnu.tar.gz")
           sha256sums=('${{ steps.calculate_checksum.outputs.sha256 }}')
 
           package() {
-              install -Dm755 "spacer" "$pkgdir/usr/bin/spacer"
+              install -Dm755 "spacer" "\$pkgdir/usr/bin/spacer"
           }
           EOF
 
