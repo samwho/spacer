@@ -309,7 +309,7 @@ jobs:
           commit_message: Update AUR package
           ssh_keyscan_types: rsa,ecdsa,ed25519
           test: true
-          test_flags: "--cleanbuild"
+          test_flags: "--cleanbuild --syncdeps"
 
   aur-publish-spacer-bin:
     needs: [github_release]
@@ -372,4 +372,4 @@ jobs:
           commit_message: Update AUR package
           ssh_keyscan_types: rsa,ecdsa,ed25519
           test: true
-          test_flags: "--cleanbuild"
+          test_flags: "--cleanbuild --syncdeps"
