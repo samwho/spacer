@@ -245,7 +245,7 @@ jobs:
 
       - name: Get tag version
         id: get_tag
-        run: echo "tag=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+        run: echo "tag=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Download source tarball
         run: |
@@ -255,7 +255,7 @@ jobs:
         id: calculate_checksum
         run: |
           sha256sum spacer-${{ steps.get_tag.outputs.tag }}.tar.gz | awk '{ print $1 }' > checksum.txt
-          echo "sha256=$(cat checksum.txt)" >> $GITHUB_ENV
+          echo "sha256=$(cat checksum.txt)" >> $GITHUB_OUTPUT
           cat checksum.txt
 
       - name: Generate PKGBUILD
@@ -319,7 +319,7 @@ jobs:
 
       - name: Get tag version
         id: get_tag
-        run: echo "tag=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+        run: echo "tag=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Download source tarball
         run: |
@@ -329,7 +329,7 @@ jobs:
         id: calculate_checksum
         run: |
           sha256sum spacer-${{ steps.get_tag.outputs.tag }}.tar.gz | awk '{ print $1 }' > checksum.txt
-          echo "sha256=$(cat checksum.txt)" >> $GITHUB_ENV
+          echo "sha256=$(cat checksum.txt)" >> $GITHUB_OUTPUT
           cat checksum.txt
 
       - name: Generate PKGBUILD
