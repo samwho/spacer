@@ -245,7 +245,7 @@ jobs:
 
       - name: Get tag version
         id: get_tag
-        run: echo ::set-output name=tag::${GITHUB_REF#refs/tags/v}
+        run: echo "tag=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
 
       - name: Download source tarball
         run: |
@@ -255,7 +255,8 @@ jobs:
         id: calculate_checksum
         run: |
           sha256sum spacer-${{ steps.get_tag.outputs.tag }}.tar.gz | awk '{ print $1 }' > checksum.txt
-          echo ::set-output name=sha256::$(cat checksum.txt)
+          echo "sha256=$(cat checksum.txt)" >> $GITHUB_ENV
+          cat checksum.txt
 
       - name: Generate PKGBUILD
         run: |
@@ -295,6 +296,8 @@ jobs:
           }
           EOF
 
+          cat PKGBUILD
+
       - name: Publish AUR package
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
         with:
@@ -316,7 +319,7 @@ jobs:
 
       - name: Get tag version
         id: get_tag
-        run: echo ::set-output name=tag::${GITHUB_REF#refs/tags/v}
+        run: echo "tag=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
 
       - name: Download source tarball
         run: |
@@ -326,7 +329,8 @@ jobs:
         id: calculate_checksum
         run: |
           sha256sum spacer-${{ steps.get_tag.outputs.tag }}.tar.gz | awk '{ print $1 }' > checksum.txt
-          echo ::set-output name=sha256::$(cat checksum.txt)
+          echo "sha256=$(cat checksum.txt)" >> $GITHUB_ENV
+          cat checksum.txt
 
       - name: Generate PKGBUILD
         run: |
@@ -353,6 +357,8 @@ jobs:
               install -Dm755 "spacer" "$pkgdir/usr/bin/spacer"
           }
           EOF
+
+          cat PKGBUILD
 
       - name: Publish AUR package
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
