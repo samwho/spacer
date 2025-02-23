@@ -350,7 +350,7 @@ jobs:
           checkdepends=()
           provides=(spacer)
           conflicts=(spacer)
-          source=("\${pkgname}-v\${pkgver}.tar.gz::https://github.com/samwho/spacer/releases/download/v${pkgver}/spacer-x86_64-unknown-linux-gnu.tar.gz")
+          source=("\${pkgname}-v\${pkgver}.tar.gz::https://github.com/samwho/spacer/releases/download/v\${pkgver}/spacer-x86_64-unknown-linux-gnu.tar.gz")
           sha256sums=('${{ steps.calculate_checksum.outputs.sha256 }}')
 
           package() {
