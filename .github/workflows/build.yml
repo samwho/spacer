@@ -123,12 +123,12 @@ jobs:
           command: build
           target: ${{ matrix.target }}
           args: "--locked --release"
+          strip: true
 
       - name: Prepare build artifacts [Windows]
         if: matrix.os == 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          strip spacer.exe
           7z a ../../../${{ matrix.name }} spacer.exe
           cd -
 
@@ -136,7 +136,6 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          strip spacer
           tar czvf ../../../${{ matrix.name }} spacer
           cd -
 
