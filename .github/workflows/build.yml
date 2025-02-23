@@ -6,7 +6,6 @@ on:
       - "docs/**"
       - "**.md"
       - "LICENSE"
-  pull_request:
 
 jobs:
   # Ensure that the project could be successfully compiled
@@ -14,28 +13,12 @@ jobs:
     name: Check Code Compiles
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          profile: minimal
           toolchain: stable
           override: true
-      - name: Set up cargo cache
-        uses: actions/cache@v3
-        continue-on-error: false
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --all
+      - run: cargo check --all
 
   # Run the `rustfmt` code formatter
   rustfmt:
@@ -43,18 +26,13 @@ jobs:
     needs: cargo_check
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          profile: minimal
           toolchain: stable
           components: rustfmt
           override: true
-      - run: rustup component add rustfmt
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+      - run: cargo fmt --all -- --check
 
   # Run the `clippy` linting tool
   clippy:
@@ -64,26 +42,20 @@ jobs:
     permissions:
       checks: write
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          profile: minimal
           toolchain: stable
           components: clippy
           override: true
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-targets --all-features -- -D clippy::all
+      - run: cargo clippy --all-targets --all-features -- -D clippy::all
 
   cargo_audit:
     name: Cargo Audit [Security]
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v1
-      - uses: actions-rs/audit-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/audit@v1
 
   test:
     needs: [cargo_check, rustfmt, clippy]
@@ -95,27 +67,12 @@ jobs:
         rust: [stable, nightly]
 
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
           override: true
-      - name: Set up cargo cache
-        uses: actions/cache@v3
-        continue-on-error: false
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
+      - run: cargo test
 
   github_build:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -127,12 +84,16 @@ jobs:
           - x86_64-unknown-linux-musl
           - x86_64-apple-darwin
           - x86_64-pc-windows-msvc
+          - aarch64-unknown-linux-gnu
+          - aarch64-unknown-linux-musl
+          - aarch64-apple-darwin
+          - aarch64-pc-windows-msvc
         include:
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             name: spacer-x86_64-unknown-linux-gnu.tar.gz
           - target: x86_64-unknown-linux-musl
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             name: spacer-x86_64-unknown-linux-musl.tar.gz
           - target: x86_64-apple-darwin
             os: macOS-latest
@@ -140,28 +101,34 @@ jobs:
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             name: spacer-x86_64-pc-windows-msvc.zip
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            name: spacer-aarch64-unknown-linux-gnu.tar.gz
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-22.04
+            name: spacer-aarch64-unknown-linux-musl.tar.gz
+          - target: aarch64-apple-darwin
+            os: macOS-latest
+            name: spacer-aarch64-apple-darwin.tar.gz
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            name: spacer-aarch64-pc-windows-msvc.zip
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          target: ${{ matrix.target }}
-
-      - uses: actions-rs/cargo@v1
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v1
         with:
           command: build
-          args: --release --target ${{ matrix.target }}
+          target: ${{ matrix.target }}
+          args: "--locked --release"
+          strip: true
 
       - name: Prepare build artifacts [Windows]
         if: matrix.os == 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          strip spacer.exe
           7z a ../../../${{ matrix.name }} spacer.exe
           cd -
 
@@ -169,7 +136,6 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          strip spacer
           tar czvf ../../../${{ matrix.name }} spacer
           cd -
 
@@ -185,7 +151,7 @@ jobs:
     needs: [test, github_build, cargo_audit]
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Download releases from github_build
         uses: actions/download-artifact@v4
@@ -207,9 +173,29 @@ jobs:
         with:
           name: spacer-x86_64-pc-windows-msvc.zip
           path: .
+      - name: Download releases from github_build
+        uses: actions/download-artifact@v4
+        with:
+          name: spacer-aarch64-unknown-linux-gnu.tar.gz
+          path: .
+      - name: Download releases from github_build
+        uses: actions/download-artifact@v4
+        with:
+          name: spacer-aarch64-unknown-linux-musl.tar.gz
+          path: .
+      - name: Download releases from github_build
+        uses: actions/download-artifact@v4
+        with:
+          name: spacer-aarch64-apple-darwin.tar.gz
+          path: .
+      - name: Download releases from github_build
+        uses: actions/download-artifact@v4
+        with:
+          name: spacer-aarch64-pc-windows-msvc.zip
+          path: .
 
       - name: Generate checksums
-        run: for file in spacer-*; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
+        run: for file in spacer-*; do openssl dgst -sha256 -r "$file" > "${file}.sha256"; done
 
       - name: Create GitHub release ${{ matrix.target }}
         uses: softprops/action-gh-release@v1
@@ -232,10 +218,9 @@ jobs:
     name: Publish Cargo Package
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          profile: minimal
           toolchain: stable
           override: true
       - run: cargo login $CRATES_IO_TOKEN
