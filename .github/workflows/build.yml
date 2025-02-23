@@ -75,7 +75,7 @@ jobs:
       - run: cargo test
 
   github_build:
-    # if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v')
     name: Build release binaries
     strategy:
       matrix:
@@ -90,10 +90,10 @@ jobs:
           - aarch64-pc-windows-msvc
         include:
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             name: spacer-x86_64-unknown-linux-gnu.tar.gz
           - target: x86_64-unknown-linux-musl
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             name: spacer-x86_64-unknown-linux-musl.tar.gz
           - target: x86_64-apple-darwin
             os: macOS-latest
@@ -102,10 +102,10 @@ jobs:
             os: windows-latest
             name: spacer-x86_64-pc-windows-msvc.zip
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             name: spacer-aarch64-unknown-linux-gnu.tar.gz
           - target: aarch64-unknown-linux-musl
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             name: spacer-aarch64-unknown-linux-musl.tar.gz
           - target: aarch64-apple-darwin
             os: macOS-latest
