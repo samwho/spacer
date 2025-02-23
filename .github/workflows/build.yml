@@ -6,7 +6,6 @@ on:
       - "docs/**"
       - "**.md"
       - "LICENSE"
-  pull_request:
 
 jobs:
   # Ensure that the project could be successfully compiled
@@ -118,14 +117,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v1
         with:
-          toolchain: stable
-          override: true
+          command: build
           target: ${{ matrix.target }}
-
-      - run: cargo build --release --target ${{ matrix.target }}
+          args: "--locked --release"
 
       - name: Prepare build artifacts [Windows]
         if: matrix.os == 'windows-latest'
