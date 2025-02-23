@@ -235,3 +235,133 @@ jobs:
       - run: cargo publish
     env:
       CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+
+  aur-publish-spacer:
+    needs: [github_release]
+    runs-on: ubuntu-22.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get tag version
+        id: get_tag
+        run: echo ::set-output name=tag::${GITHUB_REF#refs/tags/v}
+
+      - name: Download source tarball
+        run: |
+          curl -L -o spacer-${{ steps.get_tag.outputs.tag }}.tar.gz https://github.com/samwho/spacer/archive/v${{ steps.get_tag.outputs.tag }}.tar.gz
+
+      - name: Calculate SHA-256 checksum
+        id: calculate_checksum
+        run: |
+          sha256sum spacer-${{ steps.get_tag.outputs.tag }}.tar.gz | awk '{ print $1 }' > checksum.txt
+          echo ::set-output name=sha256::$(cat checksum.txt)
+
+      - name: Generate PKGBUILD
+        run: |
+          cat <<EOF > PKGBUILD
+          # Maintainer: Sam Rose <hello@samwho.dev>
+
+          pkgname='spacer'
+          pkgdesc='CLI tool to insert spacers in when command output stops'
+          pkgver='${{ steps.get_tag.outputs.tag }}'
+          pkgrel='1'
+          arch=('x86_64' 'aarch64')
+          url='https://github.com/samwho/spacer'
+          license=('MIT')
+          depends=('gcc-libs')
+          optdepends=()
+          makedepends=('rust' 'gcc' 'binutils')
+          checkdepends=('rust' 'git')
+          provides=(spacer)
+          source=("$pkgname-$pkgver.tar.gz::https://github.com/samwho/spacer/archive/v${pkgver}.tar.gz")
+          sha256sums=('${{ steps.calculate_checksum.outputs.sha256 }}')
+
+          build() {
+              cd "$pkgname-$pkgver"
+              /usr/bin/cargo build --release
+          }
+
+          check() {
+              cd "$pkgname-$pkgver"
+              /usr/bin/cargo test
+          }
+
+          package() {
+              cd "$pkgname-$pkgver"
+              strip target/release/spacer
+              install -Dm755 "target/release/spacer" "$pkgdir/usr/bin/spacer"
+              install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+          }
+          EOF
+
+      - name: Publish AUR package
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: spacer
+          pkgbuild: ./PKGBUILD
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SECRET_KEY }}
+          commit_message: Update AUR package
+          ssh_keyscan_types: rsa,ecdsa,ed25519
+          test: true
+
+  aur-publish-spacer-bin:
+    needs: [github_release]
+    runs-on: ubuntu-22.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get tag version
+        id: get_tag
+        run: echo ::set-output name=tag::${GITHUB_REF#refs/tags/v}
+
+      - name: Download source tarball
+        run: |
+          curl -L -o spacer-${{ steps.get_tag.outputs.tag }}.tar.gz https://github.com/samwho/spacer/releases/download/v${{ steps.get_tag.outputs.tag }}/spacer-x86_64-unknown-linux-gnu.tar.gz
+
+      - name: Calculate SHA-256 checksum
+        id: calculate_checksum
+        run: |
+          sha256sum spacer-${{ steps.get_tag.outputs.tag }}.tar.gz | awk '{ print $1 }' > checksum.txt
+          echo ::set-output name=sha256::$(cat checksum.txt)
+
+      - name: Generate PKGBUILD
+        run: |
+          cat <<EOF > PKGBUILD
+          # Maintainer: Sam Rose <hello@samwho.dev>
+
+          pkgname='spacer-bin'
+          pkgdesc='CLI tool to insert spacers in when command output stops'
+          pkgver='${{ steps.get_tag.outputs.tag }}'
+          pkgrel='1'
+          arch=('x86_64')
+          url='https://github.com/samwho/spacer'
+          license=('MIT')
+          depends=()
+          optdepends=()
+          makedepends=()
+          checkdepends=()
+          provides=(spacer)
+          conflicts=(spacer)
+          source=("${pkgname}-v${pkgver}.tar.gz::https://github.com/samwho/spacer/releases/download/v${pkgver}/spacer-x86_64-unknown-linux-gnu.tar.gz")
+          sha256sums=('${{ steps.calculate_checksum.outputs.sha256 }}')
+
+          package() {
+              install -Dm755 "spacer" "$pkgdir/usr/bin/spacer"
+          }
+          EOF
+
+      - name: Publish AUR package
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: spacer-bin
+          pkgbuild: ./PKGBUILD
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SECRET_KEY }}
+          commit_message: Update AUR package
+          ssh_keyscan_types: rsa,ecdsa,ed25519
+          test: true
