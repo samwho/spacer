@@ -197,7 +197,7 @@ jobs:
       - name: Generate checksums
         run: for file in spacer-*; do openssl dgst -sha256 -r "$file" > "${file}.sha256"; done
 
-      - name: Create GitHub release ${{ matrix.target }}
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v1
         with:
           files: |
@@ -209,6 +209,14 @@ jobs:
             spacer-x86_64-apple-darwin.tar.gz.sha256
             spacer-x86_64-pc-windows-msvc.zip
             spacer-x86_64-pc-windows-msvc.zip.sha256
+            spacer-aarch64-unknown-linux-gnu.tar.gz
+            spacer-aarch64-unknown-linux-gnu.tar.gz.sha256
+            spacer-aarch64-unknown-linux-musl.tar.gz
+            spacer-aarch64-unknown-linux-musl.tar.gz.sha256
+            spacer-aarch64-apple-darwin.tar.gz
+            spacer-aarch64-apple-darwin.tar.gz.sha256
+            spacer-aarch64-pc-windows-msvc.zip
+            spacer-aarch64-pc-windows-msvc.zip.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
