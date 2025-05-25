@@ -87,7 +87,7 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
     let (width, _) = terminal_size::terminal_size().unwrap_or((Width(80), Height(24)));
     debug!("terminal width: {:?}", width);
 
-    let mut dashes: usize = width.0.into();
+    let mut dashes: i32 = width.0.into();
 
     if args.padding > 0 {
         writeln!(output, "{}", "\n".repeat(args.padding - 1))?;
@@ -128,7 +128,8 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
         "{} ",
         date_str.if_supports_color(Stream::Stdout, |t| t.green())
     )?;
-    dashes -= date_str.len() + 1;
+
+    dashes -= (date_str.len() + 1) as i32;
 
     let time_str = datetime_strings.1;
     write!(
@@ -136,7 +137,7 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
         "{} ",
         time_str.if_supports_color(Stream::Stdout, |t| t.yellow())
     )?;
-    dashes -= time_str.len() + 1;
+    dashes -= (time_str.len() + 1) as i32;
 
     let elapsed_seconds = last_spacer.elapsed().as_secs_f64();
     if elapsed_seconds > 0.1 {
@@ -146,11 +147,15 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
             "{} ",
             elapsed.if_supports_color(Stream::Stdout, |t| t.blue())
         )?;
-        dashes -= elapsed.len() + 1;
+        dashes -= (elapsed.len() + 1) as i32;
     }
 
     buf.pop(); // Remove trailing space
     let info = String::from_utf8(buf)?;
+
+    if dashes < 0 {
+        dashes = 0;
+    }
 
     if args.right {
         write!(
@@ -158,7 +163,7 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
             "{} ",
             args.dash
                 .to_string()
-                .repeat(dashes)
+                .repeat(dashes as usize)
                 .as_str()
                 .if_supports_color(Stream::Stdout, |t| t.dimmed())
         )?;
@@ -170,7 +175,7 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
             "{}",
             args.dash
                 .to_string()
-                .repeat(dashes)
+                .repeat(dashes as usize)
                 .as_str()
                 .if_supports_color(Stream::Stdout, |t| t.dimmed())
         )?;
