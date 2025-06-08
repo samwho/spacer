@@ -194,11 +194,6 @@ fn run(
     args: Args,
     mut test_stats: Option<&mut TestStats>,
 ) -> Result<()> {
-    if args.force_color && args.no_color {
-        eprintln!("--force-color and --no-color are mutually exclusive");
-        std::process::exit(1);
-    }
-
     if args.no_color {
         owo_colors::set_override(false);
     }
