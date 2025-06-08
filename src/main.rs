@@ -8,9 +8,8 @@ use owo_colors::{self, OwoColorize, Stream};
 use std::time::Instant;
 use std::{
     io::{stdin, stdout, BufRead, Write},
-    ops::DerefMut,
-    sync::Mutex,
-    thread::{scope, sleep},
+    sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex},
+    thread::{scope, sleep, spawn},
 };
 use terminal_size::{Height, Width};
 
@@ -83,15 +82,17 @@ fn format_elapsed(seconds: f64) -> String {
     }
 }
 
-fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> Result<()> {
+fn print_spacer(output: Arc<Mutex<impl Write + Send + 'static>>, args: &Args, last_spacer: &Instant, stop_flag: Arc<AtomicBool>) -> Result<()> {
     let (width, _) = terminal_size::terminal_size().unwrap_or((Width(80), Height(24)));
     debug!("terminal width: {:?}", width);
 
+    let mut lock_output = output.lock().expect("failed to lock output");
     let mut dashes: i32 = width.0.into();
 
     if args.padding > 0 {
-        writeln!(output, "{}", "\n".repeat(args.padding - 1))?;
+        writeln!(lock_output, "{}", "\n".repeat(args.padding - 1))?;
     }
+    drop(lock_output);
 
     let datetime_strings = match args.timezone.clone() {
         None => {
@@ -150,47 +151,76 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
         dashes -= (elapsed.len() + 1) as i32;
     }
 
-    buf.pop(); // Remove trailing space
-    let info = String::from_utf8(buf)?;
+    let spacer_right = args.right.clone();
+    let padding = args.padding.clone();
+    let dash = args.dash.clone();
 
-    if dashes < 0 {
-        dashes = 0;
-    }
+    spawn(move || -> Result<()> {
+        let start_waiting = Instant::now();
+        let mut output = output.lock().expect("failed to lock output");
 
-    if args.right {
-        write!(
-            output,
-            "{} ",
-            args.dash
-                .to_string()
-                .repeat(dashes as usize)
-                .as_str()
-                .if_supports_color(Stream::Stdout, |t| t.dimmed())
-        )?;
-        writeln!(output, "{}", info)?;
-    } else {
-        write!(output, "{} ", info)?;
-        writeln!(
-            output,
-            "{}",
-            args.dash
-                .to_string()
-                .repeat(dashes as usize)
-                .as_str()
-                .if_supports_color(Stream::Stdout, |t| t.dimmed())
-        )?;
-    }
+        loop {
+            let mut buf = buf.clone();
+            let elapsed_time = start_waiting.elapsed().as_secs_f64();
+            let time_waiting = format_elapsed(elapsed_time);
 
-    if args.padding > 0 {
-        writeln!(output, "{}", "\n".repeat(args.padding - 1))?;
-    }
+            write!(buf,
+                   "{} ",
+                   time_waiting.if_supports_color(Stream::Stdout, |t| t.purple())
+            )?;
+            let mut dashes = dashes - (time_waiting.len() + 1) as i32;
+
+            if dashes < 0 {
+                dashes = 0;
+            }
+
+            if spacer_right {
+                buf.pop();
+                let info = String::from_utf8(buf.clone())?;
+                write!(
+                    buf,
+                    "\r{} {}",
+                    dash
+                        .to_string()
+                        .repeat(dashes as usize)
+                        .as_str()
+                        .if_supports_color(Stream::Stdout, |t| t.dimmed()),
+                    info
+                )?;
+                write!(output, "\r{}", String::from_utf8(buf)?)?
+            } else {
+                write!(
+                    buf,
+                    "{}",
+                    dash
+                        .to_string()
+                        .repeat(dashes as usize)
+                        .as_str()
+                        .if_supports_color(Stream::Stdout, |t| t.dimmed())
+                )?;
+                write!(output, "\r{}", String::from_utf8(buf)?)?;
+            }
+
+            if stop_flag.load(Ordering::Relaxed) {
+                if padding > 0 {
+                    writeln!(output, "\n{}", "\n".repeat(padding - 1))?;
+                }
+
+                break;
+            } else {
+                sleep(std::time::Duration::from_millis(10))
+            }
+        }
+
+        Ok(())
+    });
 
     Ok(())
 }
 
 fn run(
     input: impl BufRead,
-    output: impl Write + Send,
+    output: impl Write + Send + 'static,
     args: Args,
     mut test_stats: Option<&mut TestStats>,
 ) -> Result<()> {
@@ -204,9 +234,10 @@ fn run(
 
     let last_line = Mutex::new(Instant::now());
     let mut last_spacer = Instant::now();
-    let output = Mutex::new(output);
+    let output = Arc::new(Mutex::new(output));
     let finished = Mutex::new(false);
     let args = args.clone();
+    let stop_flag = Arc::new(AtomicBool::new(false));
 
     scope(|s| {
         s.spawn(|| loop {
@@ -241,9 +272,10 @@ fn run(
             if elapsed_since_line >= args.after {
                 debug!("last line is older than --after, printing spacer");
 
-                let mut output = output.lock().unwrap();
-                print_spacer(output.deref_mut(), &args, &last_spacer).unwrap();
-                drop(output);
+                stop_flag.store(false, Ordering::Relaxed);
+                let output = Arc::clone(&output);
+                let stop_flag = Arc::clone(&stop_flag);
+                print_spacer(output, &args, &last_spacer, stop_flag).unwrap();
 
                 last_spacer.clone_from(&Instant::now());
 
@@ -275,6 +307,7 @@ fn run(
             let mut last_line = last_line.lock().unwrap();
             last_line.clone_from(&Instant::now());
             drop(last_line);
+            stop_flag.store(true, Ordering::Relaxed);
             let mut out = output.lock().unwrap();
             writeln!(out, "{}", line)?;
         }
