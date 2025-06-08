@@ -9,7 +9,7 @@ use std::time::Instant;
 use std::{
     io::{stdin, stdout, BufRead, Write},
     ops::DerefMut,
-    sync::{Arc, Mutex, RwLock},
+    sync::Mutex,
     thread::{scope, sleep},
 };
 use terminal_size::{Height, Width};
@@ -207,42 +207,35 @@ fn run(
         owo_colors::set_override(true);
     }
 
+    let last_line = Mutex::new(Instant::now());
+    let mut last_spacer = Instant::now();
+    let output = Mutex::new(output);
+    let finished = Mutex::new(false);
+    let args = args.clone();
+
     scope(|s| {
-        let last_line = Arc::new(RwLock::new(Instant::now()));
-        let last_spacer = Arc::new(RwLock::new(Instant::now()));
-        let output = Arc::new(Mutex::new(output));
-
-        let finished = Arc::new(RwLock::new(false));
-        let c_last_spacer = last_spacer;
-        let c_last_line = last_line.clone();
-        let c_args = args.clone();
-        let c_finished = finished.clone();
-        let c_output = output.clone();
-
-        s.spawn(move || loop {
+        s.spawn(|| loop {
             if let Some(test_stats) = &mut test_stats {
                 test_stats.wakeups += 1;
             }
 
-            if *c_finished.read().unwrap() {
+            if *finished.lock().unwrap() {
                 debug!("thread received finish signal, exiting");
                 break;
             }
 
             debug!("begin loop");
 
-            let last_line = c_last_line.read().unwrap();
-            let last_spacer = c_last_spacer.read().unwrap();
-            if *last_spacer >= *last_line {
+            let last_line = last_line.lock().unwrap();
+            if last_spacer >= *last_line {
                 drop(last_line);
-                drop(last_spacer);
 
                 debug!("last spacer is newer than last line, sleeping");
 
                 // We sleep here because we know that we're going to sleep for
                 // a bare minimum of the --after interval.
                 sleep(std::time::Duration::from_millis(
-                    (c_args.after * 1000.0) as u64,
+                    (args.after * 1000.0) as u64,
                 ));
                 continue;
             }
@@ -250,28 +243,25 @@ fn run(
             let elapsed_since_line = last_line.elapsed().as_secs_f64();
             drop(last_line);
 
-            if elapsed_since_line >= c_args.after {
+            if elapsed_since_line >= args.after {
                 debug!("last line is older than --after, printing spacer");
 
-                let mut output = c_output.lock().unwrap();
-                print_spacer(output.deref_mut(), &c_args, &last_spacer).unwrap();
-                drop(last_spacer);
+                let mut output = output.lock().unwrap();
+                print_spacer(output.deref_mut(), &args, &last_spacer).unwrap();
                 drop(output);
 
-                let mut last_spacer = c_last_spacer.write().unwrap();
                 last_spacer.clone_from(&Instant::now());
-                drop(last_spacer);
 
                 // We sleep here because we know that we're going to sleep for
                 // a bare minimum of the --after interval.
                 sleep(std::time::Duration::from_millis(
-                    (c_args.after * 1000.0) as u64,
+                    (args.after * 1000.0) as u64,
                 ));
             } else {
                 // When calculating how long to sleep for, we want to make sure
                 // that we sleep for at least 10ms, so that we don't spin too
                 // much.
-                let sleep_for = f64::max(0.01, c_args.after - elapsed_since_line);
+                let sleep_for = f64::max(0.01, args.after - elapsed_since_line);
                 debug!(
                     "last line is newer than --after, sleeping for {:.2}s",
                     sleep_for
@@ -287,18 +277,16 @@ fn run(
 
         for line in input.lines() {
             let line = line.context("Failed to read line")?;
-            let mut last_line = last_line.write().unwrap();
+            let mut last_line = last_line.lock().unwrap();
             last_line.clone_from(&Instant::now());
             drop(last_line);
             let mut out = output.lock().unwrap();
             writeln!(out, "{}", line)?;
-            drop(out);
         }
 
         debug!("signalling thread to finish");
-        let mut finished = finished.write().unwrap();
+        let mut finished = finished.lock().unwrap();
         *finished = true;
-        drop(finished);
 
         Ok(())
     })
