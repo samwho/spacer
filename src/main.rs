@@ -86,14 +86,8 @@ fn print_spacer(output: Arc<Mutex<impl Write + Send + 'static>>, args: &Args, la
     let (width, _) = terminal_size::terminal_size().unwrap_or((Width(80), Height(24)));
     debug!("terminal width: {:?}", width);
 
-    let mut lock_output = output.lock().expect("failed to lock output");
     let mut dashes: i32 = width.0.into();
-
-    if args.padding > 0 {
-        writeln!(lock_output, "{}", "\n".repeat(args.padding - 1))?;
-    }
-    drop(lock_output);
-
+    
     let datetime_strings = match args.timezone.clone() {
         None => {
             let now: DateTime<Local> = Local::now();
@@ -159,6 +153,10 @@ fn print_spacer(output: Arc<Mutex<impl Write + Send + 'static>>, args: &Args, la
         let start_waiting = Instant::now();
         let mut output = output.lock().expect("failed to lock output");
 
+        if padding > 0 {
+            writeln!(output, "{}", "\n".repeat(padding - 1))?;
+        }
+
         loop {
             let mut buf = buf.clone();
             let elapsed_time = start_waiting.elapsed().as_secs_f64();
@@ -205,7 +203,7 @@ fn print_spacer(output: Arc<Mutex<impl Write + Send + 'static>>, args: &Args, la
             if stop_flag.load(Ordering::Relaxed) {
                 writeln!(output, "")?;
                 if padding > 0 {
-                    writeln!(output, "\n{}", "\n".repeat(padding - 1))?;
+                    writeln!(output, "{}", "\n".repeat(padding - 1))?;
                 }
 
                 break;
