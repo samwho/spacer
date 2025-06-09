@@ -177,9 +177,10 @@ fn print_spacer(output: Arc<Mutex<impl Write + Send + 'static>>, args: &Args, la
             if spacer_right {
                 buf.pop();
                 let info = String::from_utf8(buf.clone())?;
+                let mut spacer = Vec::new();
                 write!(
-                    buf,
-                    "\r{} {}",
+                    spacer,
+                    "{} {}",
                     dash
                         .to_string()
                         .repeat(dashes as usize)
@@ -187,7 +188,7 @@ fn print_spacer(output: Arc<Mutex<impl Write + Send + 'static>>, args: &Args, la
                         .if_supports_color(Stream::Stdout, |t| t.dimmed()),
                     info
                 )?;
-                write!(output, "\r{}", String::from_utf8(buf)?)?
+                write!(output, "\r{}", String::from_utf8(spacer)?)?
             } else {
                 write!(
                     buf,
@@ -202,6 +203,7 @@ fn print_spacer(output: Arc<Mutex<impl Write + Send + 'static>>, args: &Args, la
             }
 
             if stop_flag.load(Ordering::Relaxed) {
+                writeln!(output, "")?;
                 if padding > 0 {
                     writeln!(output, "\n{}", "\n".repeat(padding - 1))?;
                 }
@@ -394,6 +396,30 @@ mod tests {
         }
     }
 
+    struct SharedBuffer {
+        buffer: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl SharedBuffer {
+        fn new() -> (Self, Arc<Mutex<Vec<u8>>>) {
+            let buffer = Arc::new(Mutex::new(Vec::new()));
+            let shared = Self {
+                buffer: Arc::clone(&buffer),
+            };
+            (shared, buffer)
+        }
+    }
+
+    impl std::io::Write for SharedBuffer {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.buffer.lock().unwrap().write(buf)
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            self.buffer.lock().unwrap().flush()
+        }
+    }
+
     fn test_args() -> Args {
         Args {
             after: 0.1,
@@ -448,7 +474,7 @@ mod tests {
     )]
     #[test_case(
         vec![WriteLn("foo"), Sleep(300)],
-        vec![Line("foo"), Line(""), Spacer, Line("")],
+        vec![Line("foo"), Line(""), Spacer],
         Args {
             after: 0.1,
             dash: '-',
@@ -462,7 +488,7 @@ mod tests {
     )]
     #[test_case(
         vec![WriteLn("foo"), Sleep(300)],
-        vec![Line("foo"), Line(""), Line(""), Spacer, Line(""), Line("")],
+        vec![Line("foo"), Line(""), Line(""), Spacer],
         Args {
             after: 0.1,
             dash: '-',
@@ -513,12 +539,11 @@ mod tests {
         let expected_wakeups = 2 + (total_sleep_ms as f64 / (args.after * 1000.0)).ceil() as usize;
 
         let input = BufReader::new(TimedInput::new(ops));
-        let mut output = Vec::new();
-
+        let (output, buffer_ref) = SharedBuffer::new();
         let mut stats = super::TestStats::new();
-        run(input, &mut output, args, Some(&mut stats))?;
+        run(input, output, args, Some(&mut stats))?;
 
-        let output = String::from_utf8(output)?;
+        let output = String::from_utf8(buffer_ref.lock().unwrap().clone())?;
         let lines = output.lines().collect::<Vec<_>>();
         assert_eq!(
             lines.len(),
@@ -531,14 +556,14 @@ mod tests {
             match out {
                 Line(expected) => assert_eq!(line, expected),
                 Spacer => assert!(line.ends_with("----")),
-                RightSpacer => assert!(line.starts_with("----")),
+                RightSpacer => assert!(line.starts_with("\r----")),
                 SpacerWithLondonTimezone => {
                     assert!(line.contains("GMT") || line.contains("BST"));
                     assert!(line.ends_with("----"));
                 }
                 RightSpacerWithLondonTimezone => {
                     assert!(line.contains("GMT") || line.contains("BST"));
-                    assert!(line.starts_with("----"));
+                    assert!(line.starts_with("\r----"));
                 }
             }
         }
