@@ -7,10 +7,10 @@ use log::debug;
 use owo_colors::{self, OwoColorize, Stream};
 use std::time::Instant;
 use std::{
-    io::{stdin, stdout, BufRead, Write},
+    io::{BufRead, Write, stdin, stdout},
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
     },
     thread::{scope, sleep, spawn},
 };
@@ -69,19 +69,19 @@ fn format_elapsed(seconds: f64) -> String {
     let years = days / 365.0;
 
     if years >= 1.0 {
-        format!("{:.1}y", years)
+        format!("{years:.1}y")
     } else if months >= 1.0 {
-        format!("{:.1}mo", months)
+        format!("{months:.1}mo")
     } else if weeks >= 1.0 {
-        format!("{:.1}w", weeks)
+        format!("{weeks:.1}w")
     } else if days >= 1.0 {
-        format!("{:.1}d", days)
+        format!("{days:.1}d")
     } else if hours >= 1.0 {
-        format!("{:.1}h", hours)
+        format!("{hours:.1}h")
     } else if minutes >= 1.0 {
-        format!("{:.1}m", minutes)
+        format!("{minutes:.1}m")
     } else {
-        format!("{:.1}s", seconds)
+        format!("{seconds:.1}s")
     }
 }
 
@@ -113,7 +113,7 @@ fn print_spacer(
                 )
             }
             Err(err) => {
-                eprintln!("Error: {}", err);
+                eprintln!("Error: {err}");
                 debug!("could not parse supplied timezone name, using local time");
                 let now: DateTime<Local> = Local::now();
                 (
@@ -153,9 +153,9 @@ fn print_spacer(
         dashes -= (elapsed.len() + 1) as i32;
     }
 
-    let spacer_right = args.right.clone();
-    let padding = args.padding.clone();
-    let dash = args.dash.clone();
+    let spacer_right = args.right;
+    let padding = args.padding;
+    let dash = args.dash;
 
     spawn(move || -> Result<()> {
         let start_waiting = Instant::now();
@@ -208,7 +208,7 @@ fn print_spacer(
             }
 
             if stop_flag.load(Ordering::Relaxed) {
-                writeln!(output, "")?;
+                writeln!(output)?;
                 if padding > 0 {
                     writeln!(output, "{}", "\n".repeat(padding - 1))?;
                 }
@@ -247,65 +247,67 @@ fn run(
     let stop_flag = Arc::new(AtomicBool::new(false));
 
     scope(|s| {
-        s.spawn(|| loop {
-            if let Some(test_stats) = &mut test_stats {
-                test_stats.wakeups += 1;
-            }
+        s.spawn(|| {
+            loop {
+                if let Some(test_stats) = &mut test_stats {
+                    test_stats.wakeups += 1;
+                }
 
-            if *finished.lock().unwrap() {
-                debug!("thread received finish signal, exiting");
-                break;
-            }
+                if *finished.lock().unwrap() {
+                    debug!("thread received finish signal, exiting");
+                    break;
+                }
 
-            debug!("begin loop");
+                debug!("begin loop");
 
-            let last_line = last_line.lock().unwrap();
-            if last_spacer >= *last_line {
+                let last_line = last_line.lock().unwrap();
+                if last_spacer >= *last_line {
+                    drop(last_line);
+
+                    debug!("last spacer is newer than last line, sleeping");
+
+                    // We sleep here because we know that we're going to sleep for
+                    // a bare minimum of the --after interval.
+                    sleep(std::time::Duration::from_millis(
+                        (args.after * 1000.0) as u64,
+                    ));
+                    continue;
+                }
+
+                let elapsed_since_line = last_line.elapsed().as_secs_f64();
                 drop(last_line);
 
-                debug!("last spacer is newer than last line, sleeping");
+                if elapsed_since_line >= args.after {
+                    debug!("last line is older than --after, printing spacer");
 
-                // We sleep here because we know that we're going to sleep for
-                // a bare minimum of the --after interval.
-                sleep(std::time::Duration::from_millis(
-                    (args.after * 1000.0) as u64,
-                ));
-                continue;
-            }
+                    stop_flag.store(false, Ordering::Relaxed);
+                    let output = Arc::clone(&output);
+                    let stop_flag = Arc::clone(&stop_flag);
+                    print_spacer(output, &args, &last_spacer, stop_flag).unwrap();
 
-            let elapsed_since_line = last_line.elapsed().as_secs_f64();
-            drop(last_line);
+                    last_spacer.clone_from(&Instant::now());
 
-            if elapsed_since_line >= args.after {
-                debug!("last line is older than --after, printing spacer");
+                    // We sleep here because we know that we're going to sleep for
+                    // a bare minimum of the --after interval.
+                    sleep(std::time::Duration::from_millis(
+                        (args.after * 1000.0) as u64,
+                    ));
+                } else {
+                    // When calculating how long to sleep for, we want to make sure
+                    // that we sleep for at least 10ms, so that we don't spin too
+                    // much.
+                    let sleep_for = f64::max(0.01, args.after - elapsed_since_line);
+                    debug!(
+                        "last line is newer than --after, sleeping for {:.2}s",
+                        sleep_for
+                    );
 
-                stop_flag.store(false, Ordering::Relaxed);
-                let output = Arc::clone(&output);
-                let stop_flag = Arc::clone(&stop_flag);
-                print_spacer(output, &args, &last_spacer, stop_flag).unwrap();
-
-                last_spacer.clone_from(&Instant::now());
-
-                // We sleep here because we know that we're going to sleep for
-                // a bare minimum of the --after interval.
-                sleep(std::time::Duration::from_millis(
-                    (args.after * 1000.0) as u64,
-                ));
-            } else {
-                // When calculating how long to sleep for, we want to make sure
-                // that we sleep for at least 10ms, so that we don't spin too
-                // much.
-                let sleep_for = f64::max(0.01, args.after - elapsed_since_line);
-                debug!(
-                    "last line is newer than --after, sleeping for {:.2}s",
-                    sleep_for
-                );
-
-                // We sleep for as long as it takes to get to the number of
-                // seconds --after the last line was printed.
-                sleep(std::time::Duration::from_millis(
-                    (sleep_for * 1000.0) as u64,
-                ));
+                    // We sleep for as long as it takes to get to the number of
+                    // seconds --after the last line was printed.
+                    sleep(std::time::Duration::from_millis(
+                        (sleep_for * 1000.0) as u64,
+                    ));
+                }
             }
         });
 
@@ -316,7 +318,7 @@ fn run(
             drop(last_line);
             stop_flag.store(true, Ordering::Relaxed);
             let mut out = output.lock().unwrap();
-            writeln!(out, "{}", line)?;
+            writeln!(out, "{line}")?;
         }
 
         debug!("signalling thread to finish");
@@ -391,7 +393,7 @@ mod tests {
                         return Ok(bytes.len());
                     }
                     Op::WriteLn(string) => {
-                        let str = format!("{}\n", string);
+                        let str = format!("{string}\n");
                         let bytes = str.as_bytes();
                         buf[..bytes.len()].clone_from_slice(bytes);
                         return Ok(bytes.len());
