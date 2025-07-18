@@ -8,7 +8,10 @@ use owo_colors::{self, OwoColorize, Stream};
 use std::time::Instant;
 use std::{
     io::{stdin, stdout, BufRead, Write},
-    sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     thread::{scope, sleep, spawn},
 };
 use terminal_size::{Height, Width};
@@ -82,12 +85,17 @@ fn format_elapsed(seconds: f64) -> String {
     }
 }
 
-fn print_spacer(output: Arc<Mutex<impl Write + Send + 'static>>, args: &Args, last_spacer: &Instant, stop_flag: Arc<AtomicBool>) -> Result<()> {
+fn print_spacer(
+    output: Arc<Mutex<impl Write + Send + 'static>>,
+    args: &Args,
+    last_spacer: &Instant,
+    stop_flag: Arc<AtomicBool>,
+) -> Result<()> {
     let (width, _) = terminal_size::terminal_size().unwrap_or((Width(80), Height(24)));
     debug!("terminal width: {:?}", width);
 
     let mut dashes: i32 = width.0.into();
-    
+
     let datetime_strings = match args.timezone.clone() {
         None => {
             let now: DateTime<Local> = Local::now();
@@ -162,9 +170,10 @@ fn print_spacer(output: Arc<Mutex<impl Write + Send + 'static>>, args: &Args, la
             let elapsed_time = start_waiting.elapsed().as_secs_f64();
             let time_waiting = format_elapsed(elapsed_time);
 
-            write!(buf,
-                   "{} ",
-                   time_waiting.if_supports_color(Stream::Stdout, |t| t.purple())
+            write!(
+                buf,
+                "{} ",
+                time_waiting.if_supports_color(Stream::Stdout, |t| t.purple())
             )?;
             let mut dashes = dashes - (time_waiting.len() + 1) as i32;
 
@@ -179,8 +188,7 @@ fn print_spacer(output: Arc<Mutex<impl Write + Send + 'static>>, args: &Args, la
                 write!(
                     spacer,
                     "{} {}",
-                    dash
-                        .to_string()
+                    dash.to_string()
                         .repeat(dashes as usize)
                         .as_str()
                         .if_supports_color(Stream::Stdout, |t| t.dimmed()),
@@ -191,8 +199,7 @@ fn print_spacer(output: Arc<Mutex<impl Write + Send + 'static>>, args: &Args, la
                 write!(
                     buf,
                     "{}",
-                    dash
-                        .to_string()
+                    dash.to_string()
                         .repeat(dashes as usize)
                         .as_str()
                         .if_supports_color(Stream::Stdout, |t| t.dimmed())
