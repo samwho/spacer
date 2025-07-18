@@ -94,7 +94,7 @@ fn print_spacer(
     let (width, _) = terminal_size::terminal_size().unwrap_or((Width(80), Height(24)));
     debug!("terminal width: {:?}", width);
 
-    let mut dashes: i32 = width.0.into();
+    let mut written: u16 = 0;
 
     let datetime_strings = match args.timezone.clone() {
         None => {
@@ -132,7 +132,7 @@ fn print_spacer(
         date_str.if_supports_color(Stream::Stdout, |t| t.green())
     )?;
 
-    dashes -= (date_str.len() + 1) as i32;
+    written += (date_str.len() + 1) as u16;
 
     let time_str = datetime_strings.1;
     write!(
@@ -140,7 +140,7 @@ fn print_spacer(
         "{} ",
         time_str.if_supports_color(Stream::Stdout, |t| t.yellow())
     )?;
-    dashes -= (time_str.len() + 1) as i32;
+    written += (time_str.len() + 1) as u16;
 
     let elapsed_seconds = last_spacer.elapsed().as_secs_f64();
     if elapsed_seconds > 0.1 {
@@ -150,7 +150,7 @@ fn print_spacer(
             "{} ",
             elapsed.if_supports_color(Stream::Stdout, |t| t.blue())
         )?;
-        dashes -= (elapsed.len() + 1) as i32;
+        written += (elapsed.len() + 1) as u16;
     }
 
     let spacer_right = args.right;
@@ -175,11 +175,11 @@ fn print_spacer(
                 "{} ",
                 time_waiting.if_supports_color(Stream::Stdout, |t| t.purple())
             )?;
-            let mut dashes = dashes - (time_waiting.len() + 1) as i32;
 
-            if dashes < 0 {
-                dashes = 0;
-            }
+            let (width, _) = terminal_size::terminal_size().unwrap_or((Width(80), Height(24)));
+            let dashes = width
+                .0
+                .saturating_sub(written + (time_waiting.len() + 1) as u16);
 
             if spacer_right {
                 buf.pop();
