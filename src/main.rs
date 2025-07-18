@@ -8,9 +8,8 @@ use owo_colors::{self, OwoColorize, Stream};
 use std::time::Instant;
 use std::{
     io::{stdin, stdout, BufRead, Write},
-    ops::DerefMut,
-    sync::{Arc, Mutex, RwLock},
-    thread::{scope, sleep},
+    sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex},
+    thread::{scope, sleep, spawn},
 };
 use terminal_size::{Height, Width};
 
@@ -83,16 +82,12 @@ fn format_elapsed(seconds: f64) -> String {
     }
 }
 
-fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> Result<()> {
+fn print_spacer(output: Arc<Mutex<impl Write + Send + 'static>>, args: &Args, last_spacer: &Instant, stop_flag: Arc<AtomicBool>) -> Result<()> {
     let (width, _) = terminal_size::terminal_size().unwrap_or((Width(80), Height(24)));
     debug!("terminal width: {:?}", width);
 
     let mut dashes: i32 = width.0.into();
-
-    if args.padding > 0 {
-        writeln!(output, "{}", "\n".repeat(args.padding - 1))?;
-    }
-
+    
     let datetime_strings = match args.timezone.clone() {
         None => {
             let now: DateTime<Local> = Local::now();
@@ -150,55 +145,85 @@ fn print_spacer(mut output: impl Write, args: &Args, last_spacer: &Instant) -> R
         dashes -= (elapsed.len() + 1) as i32;
     }
 
-    buf.pop(); // Remove trailing space
-    let info = String::from_utf8(buf)?;
+    let spacer_right = args.right.clone();
+    let padding = args.padding.clone();
+    let dash = args.dash.clone();
 
-    if dashes < 0 {
-        dashes = 0;
-    }
+    spawn(move || -> Result<()> {
+        let start_waiting = Instant::now();
+        let mut output = output.lock().expect("failed to lock output");
 
-    if args.right {
-        write!(
-            output,
-            "{} ",
-            args.dash
-                .to_string()
-                .repeat(dashes as usize)
-                .as_str()
-                .if_supports_color(Stream::Stdout, |t| t.dimmed())
-        )?;
-        writeln!(output, "{}", info)?;
-    } else {
-        write!(output, "{} ", info)?;
-        writeln!(
-            output,
-            "{}",
-            args.dash
-                .to_string()
-                .repeat(dashes as usize)
-                .as_str()
-                .if_supports_color(Stream::Stdout, |t| t.dimmed())
-        )?;
-    }
+        if padding > 0 {
+            writeln!(output, "{}", "\n".repeat(padding - 1))?;
+        }
 
-    if args.padding > 0 {
-        writeln!(output, "{}", "\n".repeat(args.padding - 1))?;
-    }
+        loop {
+            let mut buf = buf.clone();
+            let elapsed_time = start_waiting.elapsed().as_secs_f64();
+            let time_waiting = format_elapsed(elapsed_time);
+
+            write!(buf,
+                   "{} ",
+                   time_waiting.if_supports_color(Stream::Stdout, |t| t.purple())
+            )?;
+            let mut dashes = dashes - (time_waiting.len() + 1) as i32;
+
+            if dashes < 0 {
+                dashes = 0;
+            }
+
+            if spacer_right {
+                buf.pop();
+                let info = String::from_utf8(buf.clone())?;
+                let mut spacer = Vec::new();
+                write!(
+                    spacer,
+                    "{} {}",
+                    dash
+                        .to_string()
+                        .repeat(dashes as usize)
+                        .as_str()
+                        .if_supports_color(Stream::Stdout, |t| t.dimmed()),
+                    info
+                )?;
+                write!(output, "\r{}", String::from_utf8(spacer)?)?
+            } else {
+                write!(
+                    buf,
+                    "{}",
+                    dash
+                        .to_string()
+                        .repeat(dashes as usize)
+                        .as_str()
+                        .if_supports_color(Stream::Stdout, |t| t.dimmed())
+                )?;
+                write!(output, "\r{}", String::from_utf8(buf)?)?;
+            }
+
+            if stop_flag.load(Ordering::Relaxed) {
+                writeln!(output, "")?;
+                if padding > 0 {
+                    writeln!(output, "{}", "\n".repeat(padding - 1))?;
+                }
+
+                break;
+            } else {
+                sleep(std::time::Duration::from_millis(10))
+            }
+        }
+
+        Ok(())
+    });
 
     Ok(())
 }
 
 fn run(
     input: impl BufRead,
-    output: impl Write + Send,
+    output: impl Write + Send + 'static,
     args: Args,
     mut test_stats: Option<&mut TestStats>,
 ) -> Result<()> {
-    if args.force_color && args.no_color {
-        eprintln!("--force-color and --no-color are mutually exclusive");
-        std::process::exit(1);
-    }
-
     if args.no_color {
         owo_colors::set_override(false);
     }
@@ -207,42 +232,36 @@ fn run(
         owo_colors::set_override(true);
     }
 
+    let last_line = Mutex::new(Instant::now());
+    let mut last_spacer = Instant::now();
+    let output = Arc::new(Mutex::new(output));
+    let finished = Mutex::new(false);
+    let args = args.clone();
+    let stop_flag = Arc::new(AtomicBool::new(false));
+
     scope(|s| {
-        let last_line = Arc::new(RwLock::new(Instant::now()));
-        let last_spacer = Arc::new(RwLock::new(Instant::now()));
-        let output = Arc::new(Mutex::new(output));
-
-        let finished = Arc::new(RwLock::new(false));
-        let c_last_spacer = last_spacer;
-        let c_last_line = last_line.clone();
-        let c_args = args.clone();
-        let c_finished = finished.clone();
-        let c_output = output.clone();
-
-        s.spawn(move || loop {
+        s.spawn(|| loop {
             if let Some(test_stats) = &mut test_stats {
                 test_stats.wakeups += 1;
             }
 
-            if *c_finished.read().unwrap() {
+            if *finished.lock().unwrap() {
                 debug!("thread received finish signal, exiting");
                 break;
             }
 
             debug!("begin loop");
 
-            let last_line = c_last_line.read().unwrap();
-            let last_spacer = c_last_spacer.read().unwrap();
-            if *last_spacer >= *last_line {
+            let last_line = last_line.lock().unwrap();
+            if last_spacer >= *last_line {
                 drop(last_line);
-                drop(last_spacer);
 
                 debug!("last spacer is newer than last line, sleeping");
 
                 // We sleep here because we know that we're going to sleep for
                 // a bare minimum of the --after interval.
                 sleep(std::time::Duration::from_millis(
-                    (c_args.after * 1000.0) as u64,
+                    (args.after * 1000.0) as u64,
                 ));
                 continue;
             }
@@ -250,28 +269,26 @@ fn run(
             let elapsed_since_line = last_line.elapsed().as_secs_f64();
             drop(last_line);
 
-            if elapsed_since_line >= c_args.after {
+            if elapsed_since_line >= args.after {
                 debug!("last line is older than --after, printing spacer");
 
-                let mut output = c_output.lock().unwrap();
-                print_spacer(output.deref_mut(), &c_args, &last_spacer).unwrap();
-                drop(last_spacer);
-                drop(output);
+                stop_flag.store(false, Ordering::Relaxed);
+                let output = Arc::clone(&output);
+                let stop_flag = Arc::clone(&stop_flag);
+                print_spacer(output, &args, &last_spacer, stop_flag).unwrap();
 
-                let mut last_spacer = c_last_spacer.write().unwrap();
                 last_spacer.clone_from(&Instant::now());
-                drop(last_spacer);
 
                 // We sleep here because we know that we're going to sleep for
                 // a bare minimum of the --after interval.
                 sleep(std::time::Duration::from_millis(
-                    (c_args.after * 1000.0) as u64,
+                    (args.after * 1000.0) as u64,
                 ));
             } else {
                 // When calculating how long to sleep for, we want to make sure
                 // that we sleep for at least 10ms, so that we don't spin too
                 // much.
-                let sleep_for = f64::max(0.01, c_args.after - elapsed_since_line);
+                let sleep_for = f64::max(0.01, args.after - elapsed_since_line);
                 debug!(
                     "last line is newer than --after, sleeping for {:.2}s",
                     sleep_for
@@ -287,18 +304,17 @@ fn run(
 
         for line in input.lines() {
             let line = line.context("Failed to read line")?;
-            let mut last_line = last_line.write().unwrap();
+            let mut last_line = last_line.lock().unwrap();
             last_line.clone_from(&Instant::now());
             drop(last_line);
+            stop_flag.store(true, Ordering::Relaxed);
             let mut out = output.lock().unwrap();
             writeln!(out, "{}", line)?;
-            drop(out);
         }
 
         debug!("signalling thread to finish");
-        let mut finished = finished.write().unwrap();
+        let mut finished = finished.lock().unwrap();
         *finished = true;
-        drop(finished);
 
         Ok(())
     })
@@ -378,6 +394,30 @@ mod tests {
         }
     }
 
+    struct SharedBuffer {
+        buffer: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl SharedBuffer {
+        fn new() -> (Self, Arc<Mutex<Vec<u8>>>) {
+            let buffer = Arc::new(Mutex::new(Vec::new()));
+            let shared = Self {
+                buffer: Arc::clone(&buffer),
+            };
+            (shared, buffer)
+        }
+    }
+
+    impl std::io::Write for SharedBuffer {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.buffer.lock().unwrap().write(buf)
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            self.buffer.lock().unwrap().flush()
+        }
+    }
+
     fn test_args() -> Args {
         Args {
             after: 0.1,
@@ -432,7 +472,7 @@ mod tests {
     )]
     #[test_case(
         vec![WriteLn("foo"), Sleep(300)],
-        vec![Line("foo"), Line(""), Spacer, Line("")],
+        vec![Line("foo"), Line(""), Spacer],
         Args {
             after: 0.1,
             dash: '-',
@@ -446,7 +486,7 @@ mod tests {
     )]
     #[test_case(
         vec![WriteLn("foo"), Sleep(300)],
-        vec![Line("foo"), Line(""), Line(""), Spacer, Line(""), Line("")],
+        vec![Line("foo"), Line(""), Line(""), Spacer],
         Args {
             after: 0.1,
             dash: '-',
@@ -497,12 +537,11 @@ mod tests {
         let expected_wakeups = 2 + (total_sleep_ms as f64 / (args.after * 1000.0)).ceil() as usize;
 
         let input = BufReader::new(TimedInput::new(ops));
-        let mut output = Vec::new();
-
+        let (output, buffer_ref) = SharedBuffer::new();
         let mut stats = super::TestStats::new();
-        run(input, &mut output, args, Some(&mut stats))?;
+        run(input, output, args, Some(&mut stats))?;
 
-        let output = String::from_utf8(output)?;
+        let output = String::from_utf8(buffer_ref.lock().unwrap().clone())?;
         let lines = output.lines().collect::<Vec<_>>();
         assert_eq!(
             lines.len(),
@@ -515,14 +554,14 @@ mod tests {
             match out {
                 Line(expected) => assert_eq!(line, expected),
                 Spacer => assert!(line.ends_with("----")),
-                RightSpacer => assert!(line.starts_with("----")),
+                RightSpacer => assert!(line.starts_with("\r----")),
                 SpacerWithLondonTimezone => {
                     assert!(line.contains("GMT") || line.contains("BST"));
                     assert!(line.ends_with("----"));
                 }
                 RightSpacerWithLondonTimezone => {
                     assert!(line.contains("GMT") || line.contains("BST"));
-                    assert!(line.starts_with("----"));
+                    assert!(line.starts_with("\r----"));
                 }
             }
         }
