@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+
 use chrono::{DateTime, Local};
 use chrono_tz::Tz;
 use clap::Parser;
@@ -30,6 +31,10 @@ struct Args {
     /// Number of newlines to print before and after spacer lines
     #[arg(long, short, default_value = "0")]
     padding: usize,
+
+    /// Number of characters to print on a spacer line
+    #[arg(long, short)]
+    width: Option<u16>,
 
     /// Force the output to not be colorized
     #[arg(long, group = "color-overrides", default_value = "false")]
@@ -156,6 +161,7 @@ fn print_spacer(
     let spacer_right = args.right;
     let padding = args.padding;
     let dash = args.dash;
+    let width = args.width;
 
     spawn(move || -> Result<()> {
         let start_waiting = Instant::now();
@@ -176,10 +182,12 @@ fn print_spacer(
                 time_waiting.if_supports_color(Stream::Stdout, |t| t.purple())
             )?;
 
-            let (width, _) = terminal_size::terminal_size().unwrap_or((Width(80), Height(24)));
-            let dashes = width
-                .0
-                .saturating_sub(written + (time_waiting.len() + 1) as u16);
+            let dashes = width.unwrap_or_else(|| {
+                terminal_size::terminal_size()
+                    .map(|(Width(w), _)| w)
+                    .unwrap_or(80)
+                    .saturating_sub(written + (time_waiting.len() + 1) as u16)
+            });
 
             if spacer_right {
                 buf.pop();
@@ -361,6 +369,7 @@ mod tests {
         RightSpacer,
         SpacerWithLondonTimezone,
         RightSpacerWithLondonTimezone,
+        CustomWidthSpacer,
     }
 
     struct TimedInput {
@@ -432,6 +441,7 @@ mod tests {
             after: 0.1,
             dash: '-',
             padding: 0,
+            width: None,
             no_color: true,
             force_color: false,
             right: false,
@@ -472,6 +482,7 @@ mod tests {
             after: 0.1,
             dash: '-',
             padding: 0,
+            width: None,
             no_color: true,
             force_color: false,
             right: true,
@@ -486,6 +497,7 @@ mod tests {
             after: 0.1,
             dash: '-',
             padding: 1,
+            width: None,
             no_color: true,
             force_color: false,
             right: false,
@@ -500,6 +512,7 @@ mod tests {
             after: 0.1,
             dash: '-',
             padding: 2,
+            width: None,
             no_color: true,
             force_color: false,
             right: false,
@@ -514,6 +527,7 @@ mod tests {
             after: 0.1,
             dash: '-',
             padding: 0,
+            width: None,
             no_color: true,
             force_color: false,
             right: false,
@@ -528,6 +542,7 @@ mod tests {
             after: 0.1,
             dash: '-',
             padding: 0,
+            width: None,
             no_color: true,
             force_color: false,
             right: true,
@@ -535,6 +550,22 @@ mod tests {
         }
         ; "right spacer with timezone"
     )]
+    #[test_case(
+        vec![WriteLn("foo"), Sleep(300)],
+        vec![Line("foo"), CustomWidthSpacer],        
+        Args {
+            after: 0.1,
+            dash: '-',
+            padding: 0,
+            width: Some(20),
+            no_color: true,
+            force_color: false,
+            right: false,
+            timezone: None,
+        }
+        ; "custom width"
+)]
+
     fn test_output(ops: Vec<Op>, out: Vec<Out>, args: Args) -> Result<()> {
         let mut total_sleep_ms = 0;
         for op in ops.iter() {
@@ -571,6 +602,11 @@ mod tests {
                 RightSpacerWithLondonTimezone => {
                     assert!(line.contains("GMT") || line.contains("BST"));
                     assert!(line.starts_with("\r----"));
+                }
+                CustomWidthSpacer => {
+                    // Check that the line has 20 dashes but not 21
+                    assert!(line.contains("--------------------"));
+                    assert!(!line.contains("---------------------"));
                 }
             }
         }
