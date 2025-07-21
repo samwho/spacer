@@ -369,7 +369,7 @@ mod tests {
         RightSpacer,
         SpacerWithLondonTimezone,
         RightSpacerWithLondonTimezone,
-        CustomWidthSpacer,
+        CustomWidthSpacer(usize),
     }
 
     struct TimedInput {
@@ -552,7 +552,7 @@ mod tests {
     )]
     #[test_case(
         vec![WriteLn("foo"), Sleep(300)],
-        vec![Line("foo"), CustomWidthSpacer],        
+        vec![Line("foo"), CustomWidthSpacer(20)],        
         Args {
             after: 0.1,
             dash: '-',
@@ -603,10 +603,11 @@ mod tests {
                     assert!(line.contains("GMT") || line.contains("BST"));
                     assert!(line.starts_with("\r----"));
                 }
-                CustomWidthSpacer => {
-                    // Check that the line has 20 dashes but not 21
-                    assert!(line.contains("--------------------"));
-                    assert!(!line.contains("---------------------"));
+                CustomWidthSpacer(width) => {
+                    let dashes = "-".repeat(*width);
+                    let too_many_dashes = "-".repeat(*width + 1);
+                    assert!(line.contains(&dashes));
+                    assert!(!line.contains(&too_many_dashes));
                 }
             }
         }
