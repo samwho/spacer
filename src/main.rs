@@ -36,6 +36,10 @@ struct Args {
     #[arg(long, short)]
     width: Option<u16>,
 
+    /// Show the time waiting
+    #[arg(long)]
+    waiting: bool,
+
     /// Force the output to not be colorized
     #[arg(long, group = "color-overrides", default_value = "false")]
     no_color: bool,
@@ -94,7 +98,7 @@ fn print_spacer(
     output: Arc<Mutex<impl Write + Send + 'static>>,
     args: &Args,
     last_spacer: &Instant,
-    stop_flag: Arc<AtomicBool>,
+    stop_flag: Option<Arc<AtomicBool>>,
 ) -> Result<()> {
     let (width, _) = terminal_size::terminal_size().unwrap_or((Width(80), Height(24)));
     debug!("terminal width: {:?}", width);
@@ -162,6 +166,7 @@ fn print_spacer(
     let padding = args.padding;
     let dash = args.dash;
     let width = args.width;
+    let waiting = args.waiting;
 
     spawn(move || -> Result<()> {
         let start_waiting = Instant::now();
@@ -173,20 +178,26 @@ fn print_spacer(
 
         loop {
             let mut buf = buf.clone();
-            let elapsed_time = start_waiting.elapsed().as_secs_f64();
-            let time_waiting = format_elapsed(elapsed_time);
 
-            write!(
-                buf,
-                "{} ",
-                time_waiting.if_supports_color(Stream::Stdout, |t| t.purple())
-            )?;
+            let written = if waiting {
+                let elapsed_time = start_waiting.elapsed().as_secs_f64();
+                let time_waiting = format_elapsed(elapsed_time);
+
+                write!(
+                    buf,
+                    "{} ",
+                    time_waiting.if_supports_color(Stream::Stdout, |t| t.purple())
+                )?;
+                written + (time_waiting.len() + 1) as u16
+            } else {
+                written
+            };
 
             let dashes = width.unwrap_or_else(|| {
                 terminal_size::terminal_size()
                     .map(|(Width(w), _)| w)
                     .unwrap_or(80)
-                    .saturating_sub(written + (time_waiting.len() + 1) as u16)
+                    .saturating_sub(written)
             });
 
             if spacer_right {
@@ -215,7 +226,7 @@ fn print_spacer(
                 write!(output, "\r{}", String::from_utf8(buf)?)?;
             }
 
-            if stop_flag.load(Ordering::Relaxed) {
+            if !waiting || stop_flag.as_ref().unwrap().load(Ordering::Relaxed) {
                 writeln!(output)?;
                 if padding > 0 {
                     writeln!(output, "{}", "\n".repeat(padding - 1))?;
@@ -288,9 +299,13 @@ fn run(
                 if elapsed_since_line >= args.after {
                     debug!("last line is older than --after, printing spacer");
 
-                    stop_flag.store(false, Ordering::Relaxed);
+                    let stop_flag = if args.waiting {
+                        stop_flag.store(false, Ordering::Relaxed);
+                        Some(Arc::clone(&stop_flag))
+                    } else {
+                        None
+                    };
                     let output = Arc::clone(&output);
-                    let stop_flag = Arc::clone(&stop_flag);
                     print_spacer(output, &args, &last_spacer, stop_flag).unwrap();
 
                     last_spacer.clone_from(&Instant::now());
@@ -324,7 +339,9 @@ fn run(
             let mut last_line = last_line.lock().unwrap();
             last_line.clone_from(&Instant::now());
             drop(last_line);
-            stop_flag.store(true, Ordering::Relaxed);
+            if args.waiting {
+                stop_flag.store(true, Ordering::Relaxed);
+            }
             let mut out = output.lock().unwrap();
             writeln!(out, "{line}")?;
         }
@@ -442,6 +459,7 @@ mod tests {
             dash: '-',
             padding: 0,
             width: None,
+            waiting: false,
             no_color: true,
             force_color: false,
             right: false,
@@ -483,6 +501,7 @@ mod tests {
             dash: '-',
             padding: 0,
             width: None,
+            waiting: false,
             no_color: true,
             force_color: false,
             right: true,
@@ -492,12 +511,13 @@ mod tests {
     )]
     #[test_case(
         vec![WriteLn("foo"), Sleep(300)],
-        vec![Line("foo"), Line(""), Spacer],
+        vec![Line("foo"), Line(""), Spacer, Line("")],
         Args {
             after: 0.1,
             dash: '-',
             padding: 1,
             width: None,
+            waiting: false,
             no_color: true,
             force_color: false,
             right: false,
@@ -513,6 +533,7 @@ mod tests {
             dash: '-',
             padding: 2,
             width: None,
+            waiting: true,
             no_color: true,
             force_color: false,
             right: false,
@@ -528,6 +549,7 @@ mod tests {
             dash: '-',
             padding: 0,
             width: None,
+            waiting: false,
             no_color: true,
             force_color: false,
             right: false,
@@ -543,6 +565,7 @@ mod tests {
             dash: '-',
             padding: 0,
             width: None,
+            waiting: false,
             no_color: true,
             force_color: false,
             right: true,
@@ -558,6 +581,7 @@ mod tests {
             dash: '-',
             padding: 0,
             width: Some(20),
+            waiting: true,
             no_color: true,
             force_color: false,
             right: false,
