@@ -36,9 +36,9 @@ struct Args {
     #[arg(long, short)]
     width: Option<u16>,
 
-    /// Show the time waiting
+    /// Disable the real-time counter
     #[arg(long)]
-    waiting: bool,
+    no_counter: bool,
 
     /// Force the output to not be colorized
     #[arg(long, group = "color-overrides", default_value = "false")]
@@ -166,7 +166,7 @@ fn print_spacer(
     let padding = args.padding;
     let dash = args.dash;
     let width = args.width;
-    let waiting = args.waiting;
+    let no_counter = args.no_counter;
 
     spawn(move || -> Result<()> {
         let start_waiting = Instant::now();
@@ -179,7 +179,7 @@ fn print_spacer(
         loop {
             let mut buf = buf.clone();
 
-            let written = if waiting {
+            let written = if !no_counter {
                 let elapsed_time = start_waiting.elapsed().as_secs_f64();
                 let time_waiting = format_elapsed(elapsed_time);
 
@@ -226,7 +226,7 @@ fn print_spacer(
                 write!(output, "\r{}", String::from_utf8(buf)?)?;
             }
 
-            if !waiting || stop_flag.as_ref().unwrap().load(Ordering::Relaxed) {
+            if no_counter || stop_flag.as_ref().unwrap().load(Ordering::Relaxed) {
                 writeln!(output)?;
                 if padding > 0 {
                     writeln!(output, "{}", "\n".repeat(padding - 1))?;
@@ -299,7 +299,7 @@ fn run(
                 if elapsed_since_line >= args.after {
                     debug!("last line is older than --after, printing spacer");
 
-                    let stop_flag = if args.waiting {
+                    let stop_flag = if !args.no_counter {
                         stop_flag.store(false, Ordering::Relaxed);
                         Some(Arc::clone(&stop_flag))
                     } else {
@@ -339,7 +339,7 @@ fn run(
             let mut last_line = last_line.lock().unwrap();
             last_line.clone_from(&Instant::now());
             drop(last_line);
-            if args.waiting {
+            if !args.no_counter {
                 stop_flag.store(true, Ordering::Relaxed);
             }
             let mut out = output.lock().unwrap();
@@ -459,7 +459,7 @@ mod tests {
             dash: '-',
             padding: 0,
             width: None,
-            waiting: false,
+            no_counter: false,
             no_color: true,
             force_color: false,
             right: false,
@@ -501,7 +501,7 @@ mod tests {
             dash: '-',
             padding: 0,
             width: None,
-            waiting: false,
+            no_counter: false,
             no_color: true,
             force_color: false,
             right: true,
@@ -511,13 +511,13 @@ mod tests {
     )]
     #[test_case(
         vec![WriteLn("foo"), Sleep(300)],
-        vec![Line("foo"), Line(""), Spacer, Line("")],
+        vec![Line("foo"), Line(""), Spacer],
         Args {
             after: 0.1,
             dash: '-',
             padding: 1,
             width: None,
-            waiting: false,
+            no_counter: false,
             no_color: true,
             force_color: false,
             right: false,
@@ -527,13 +527,13 @@ mod tests {
     )]
     #[test_case(
         vec![WriteLn("foo"), Sleep(300)],
-        vec![Line("foo"), Line(""), Line(""), Spacer],
+        vec![Line("foo"), Line(""), Line(""), Spacer, Line(""), Line("")],
         Args {
             after: 0.1,
             dash: '-',
             padding: 2,
             width: None,
-            waiting: true,
+            no_counter: true,
             no_color: true,
             force_color: false,
             right: false,
@@ -549,7 +549,7 @@ mod tests {
             dash: '-',
             padding: 0,
             width: None,
-            waiting: false,
+            no_counter: false,
             no_color: true,
             force_color: false,
             right: false,
@@ -565,7 +565,7 @@ mod tests {
             dash: '-',
             padding: 0,
             width: None,
-            waiting: false,
+            no_counter: false,
             no_color: true,
             force_color: false,
             right: true,
@@ -581,7 +581,7 @@ mod tests {
             dash: '-',
             padding: 0,
             width: Some(20),
-            waiting: true,
+            no_counter: true,
             no_color: true,
             force_color: false,
             right: false,
