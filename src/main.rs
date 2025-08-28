@@ -40,6 +40,10 @@ struct Args {
     #[arg(long, group = "color-overrides", default_value = "false")]
     no_color: bool,
 
+    /// Remove the real-time counter from the output
+    #[arg(long, default_value = "false")]
+    no_timer: bool,
+
     /// Force the output to be colorized, even if the output is not a TTY
     #[arg(long, group = "color-overrides", default_value = "false")]
     force_color: bool,
@@ -159,6 +163,7 @@ fn print_spacer(
     }
 
     let spacer_right = args.right;
+    let display_realtime_counter = !args.no_timer;
     let padding = args.padding;
     let dash = args.dash;
     let width = args.width;
@@ -173,20 +178,25 @@ fn print_spacer(
 
         loop {
             let mut buf = buf.clone();
-            let elapsed_time = start_waiting.elapsed().as_secs_f64();
-            let time_waiting = format_elapsed(elapsed_time);
+            let mut time_waiting = String::new();
 
-            write!(
-                buf,
-                "{} ",
-                time_waiting.if_supports_color(Stream::Stdout, |t| t.purple())
-            )?;
+            if display_realtime_counter {
+                let elapsed_time = start_waiting.elapsed().as_secs_f64();
+                time_waiting = format_elapsed(elapsed_time);
+
+                write!(
+                    buf,
+                    "{} ",
+                    time_waiting.if_supports_color(Stream::Stdout, |t| t.purple())
+                )?;
+            }
 
             let dashes = width.unwrap_or_else(|| {
+                let time_waiting_len = if display_realtime_counter { time_waiting.len() + 1 } else { 0 };
                 terminal_size::terminal_size()
                     .map(|(Width(w), _)| w)
                     .unwrap_or(80)
-                    .saturating_sub(written + (time_waiting.len() + 1) as u16)
+                    .saturating_sub(written + time_waiting_len as u16)
             });
 
             if spacer_right {
@@ -356,6 +366,7 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use test_case::test_case;
+    use regex::Regex;
 
     enum Op {
         Sleep(u64),
@@ -369,6 +380,7 @@ mod tests {
         RightSpacer,
         SpacerWithLondonTimezone,
         RightSpacerWithLondonTimezone,
+        TimestampWithElapsedTimeAndSpacer,
         CustomWidthSpacer(usize),
     }
 
@@ -443,6 +455,7 @@ mod tests {
             padding: 0,
             width: None,
             no_color: true,
+            no_timer: false,
             force_color: false,
             right: false,
             timezone: None,
@@ -484,6 +497,7 @@ mod tests {
             padding: 0,
             width: None,
             no_color: true,
+            no_timer: false,
             force_color: false,
             right: true,
             timezone: None,
@@ -499,6 +513,7 @@ mod tests {
             padding: 1,
             width: None,
             no_color: true,
+            no_timer: false,
             force_color: false,
             right: false,
             timezone: None,
@@ -514,6 +529,7 @@ mod tests {
             padding: 2,
             width: None,
             no_color: true,
+            no_timer: false,
             force_color: false,
             right: false,
             timezone: None,
@@ -529,6 +545,7 @@ mod tests {
             padding: 0,
             width: None,
             no_color: true,
+            no_timer: false,
             force_color: false,
             right: false,
             timezone: Some("Europe/London".to_string()),
@@ -544,6 +561,7 @@ mod tests {
             padding: 0,
             width: None,
             no_color: true,
+            no_timer: false,
             force_color: false,
             right: true,
             timezone: Some("Europe/London".to_string()),
@@ -559,12 +577,29 @@ mod tests {
             padding: 0,
             width: Some(20),
             no_color: true,
+            no_timer: false,
             force_color: false,
             right: false,
             timezone: None,
         }
         ; "custom width"
-)]
+    )]
+    #[test_case(
+        vec![WriteLn("foo"), Sleep(110)],
+        vec![Line("foo"), TimestampWithElapsedTimeAndSpacer],
+        Args {
+            after: 0.1,
+            dash: '-',
+            padding: 0,
+            width: Some(20),
+            no_color: true,
+            no_timer: true,
+            force_color: false,
+            right: false,
+            timezone: None,
+        }
+        ; "disabled real-time counter"
+    )]
 
     fn test_output(ops: Vec<Op>, out: Vec<Out>, args: Args) -> Result<()> {
         let mut total_sleep_ms = 0;
@@ -608,6 +643,11 @@ mod tests {
                     let too_many_dashes = "-".repeat(*width + 1);
                     assert!(line.contains(&dashes));
                     assert!(!line.contains(&too_many_dashes));
+                }
+                TimestampWithElapsedTimeAndSpacer => {
+                    let pattern = r"^\r\d{4}(?:-\d{2}){2} (?:\d\d:){2}\d\d \d\.\ds -.+$";
+                    let line_matches_without_elapsed_time = Regex::new(pattern).unwrap().is_match(line);
+                    assert!(line_matches_without_elapsed_time);
                 }
             }
         }

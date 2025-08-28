@@ -34,3 +34,4 @@ chrono-tz = "0.10"
 
 [dev-dependencies]
 test-case = "3"
+regex = "1.11.2"
