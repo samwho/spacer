@@ -192,7 +192,11 @@ fn print_spacer(
             }
 
             let dashes = width.unwrap_or_else(|| {
-                let time_waiting_len = if display_realtime_counter { time_waiting.len() + 1 } else { 0 };
+                let time_waiting_len = if display_realtime_counter {
+                    time_waiting.len() + 1
+                } else {
+                    0
+                };
                 terminal_size::terminal_size()
                     .map(|(Width(w), _)| w)
                     .unwrap_or(80)
@@ -362,11 +366,11 @@ mod tests {
     use self::Op::*;
     use self::Out::*;
     use super::*;
+    use regex::Regex;
     use std::io::{BufReader, Read};
     use std::thread::sleep;
     use std::time::Duration;
     use test_case::test_case;
-    use regex::Regex;
 
     enum Op {
         Sleep(u64),
@@ -646,7 +650,8 @@ mod tests {
                 }
                 TimestampWithElapsedTimeAndSpacer => {
                     let pattern = r"^\r\d{4}(?:-\d{2}){2} (?:\d\d:){2}\d\d \d\.\ds -.+$";
-                    let line_matches_without_elapsed_time = Regex::new(pattern).unwrap().is_match(line);
+                    let line_matches_without_elapsed_time =
+                        Regex::new(pattern).unwrap().is_match(line);
                     assert!(line_matches_without_elapsed_time);
                 }
             }
