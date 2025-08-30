@@ -1,6 +1,6 @@
 [package]
 name = "spacer"
-version = "0.4.5"
+version = "0.5.0"
 edition = "2024"
 license = "MIT"
 authors = ["Sam Rose <hello@samwho.dev>"]
