@@ -36,9 +36,10 @@ struct Args {
     #[arg(long, short)]
     width: Option<u16>,
 
-    /// Disable the real-time counter
+    /// Enable stopwatch mode, which will increment a counter in real-time on
+    /// the spacer
     #[arg(long)]
-    no_counter: bool,
+    stopwatch: bool,
 
     /// Force the output to not be colorized
     #[arg(long, group = "color-overrides", default_value = "false")]
@@ -166,7 +167,7 @@ fn print_spacer(
     let padding = args.padding;
     let dash = args.dash;
     let width = args.width;
-    let no_counter = args.no_counter;
+    let stopwatch = args.stopwatch;
 
     spawn(move || -> Result<()> {
         let start_waiting = Instant::now();
@@ -179,7 +180,7 @@ fn print_spacer(
         loop {
             let mut buf = buf.clone();
 
-            let written = if !no_counter {
+            let written = if stopwatch {
                 let elapsed_time = start_waiting.elapsed().as_secs_f64();
                 let time_waiting = format_elapsed(elapsed_time);
 
@@ -226,7 +227,7 @@ fn print_spacer(
                 write!(output, "\r{}", String::from_utf8(buf)?)?;
             }
 
-            if no_counter || stop_flag.as_ref().unwrap().load(Ordering::Relaxed) {
+            if !stopwatch || stop_flag.as_ref().unwrap().load(Ordering::Relaxed) {
                 writeln!(output)?;
                 if padding > 0 {
                     writeln!(output, "{}", "\n".repeat(padding - 1))?;
@@ -299,7 +300,7 @@ fn run(
                 if elapsed_since_line >= args.after {
                     debug!("last line is older than --after, printing spacer");
 
-                    let stop_flag = if !args.no_counter {
+                    let stop_flag = if args.stopwatch {
                         stop_flag.store(false, Ordering::Relaxed);
                         Some(Arc::clone(&stop_flag))
                     } else {
@@ -339,7 +340,7 @@ fn run(
             let mut last_line = last_line.lock().unwrap();
             last_line.clone_from(&Instant::now());
             drop(last_line);
-            if !args.no_counter {
+            if args.stopwatch {
                 stop_flag.store(true, Ordering::Relaxed);
             }
             let mut out = output.lock().unwrap();
@@ -459,7 +460,7 @@ mod tests {
             dash: '-',
             padding: 0,
             width: None,
-            no_counter: false,
+            stopwatch: true,
             no_color: true,
             force_color: false,
             right: false,
@@ -501,7 +502,7 @@ mod tests {
             dash: '-',
             padding: 0,
             width: None,
-            no_counter: false,
+            stopwatch: true,
             no_color: true,
             force_color: false,
             right: true,
@@ -517,7 +518,7 @@ mod tests {
             dash: '-',
             padding: 1,
             width: None,
-            no_counter: false,
+            stopwatch: true,
             no_color: true,
             force_color: false,
             right: false,
@@ -533,7 +534,7 @@ mod tests {
             dash: '-',
             padding: 2,
             width: None,
-            no_counter: true,
+            stopwatch: false,
             no_color: true,
             force_color: false,
             right: false,
@@ -549,7 +550,7 @@ mod tests {
             dash: '-',
             padding: 0,
             width: None,
-            no_counter: false,
+            stopwatch: true,
             no_color: true,
             force_color: false,
             right: false,
@@ -565,7 +566,7 @@ mod tests {
             dash: '-',
             padding: 0,
             width: None,
-            no_counter: false,
+            stopwatch: true,
             no_color: true,
             force_color: false,
             right: true,
@@ -575,13 +576,13 @@ mod tests {
     )]
     #[test_case(
         vec![WriteLn("foo"), Sleep(300)],
-        vec![Line("foo"), CustomWidthSpacer(20)],        
+        vec![Line("foo"), CustomWidthSpacer(20)],
         Args {
             after: 0.1,
             dash: '-',
             padding: 0,
             width: Some(20),
-            no_counter: true,
+            stopwatch: false,
             no_color: true,
             force_color: false,
             right: false,
